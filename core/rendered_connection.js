@@ -33,10 +33,12 @@ goog.require('Blockly.Connection');
  * Class for a connection between blocks that may be rendered on screen.
  * @param {!Blockly.Block} source The block establishing this connection.
  * @param {number} type The type of the connection.
+ * @extends {Blockly.Connection}
  * @constructor
  */
 Blockly.RenderedConnection = function(source, type) {
   Blockly.RenderedConnection.superClass_.constructor.call(this, source, type);
+  this.offsetInBlock_ = new goog.math.Coordinate(0, 0);
 };
 goog.inherits(Blockly.RenderedConnection, Blockly.Connection);
 
@@ -83,7 +85,8 @@ Blockly.RenderedConnection.prototype.bumpAwayFrom_ = function(staticConnection) 
     reverse = true;
   }
   // Raise it to the top for extra visibility.
-  rootBlock.getSvgRoot().parentNode.appendChild(rootBlock.getSvgRoot());
+  var selected = Blockly.selected == rootBlock;
+  selected || rootBlock.addSelect();
   var dx = (staticConnection.x_ + Blockly.SNAP_RADIUS) - this.x_;
   var dy = (staticConnection.y_ + Blockly.SNAP_RADIUS) - this.y_;
   if (reverse) {
@@ -94,6 +97,7 @@ Blockly.RenderedConnection.prototype.bumpAwayFrom_ = function(staticConnection) 
     dx = -dx;
   }
   rootBlock.moveBy(dx, dy);
+  selected || rootBlock.removeSelect();
 };
 
 /**
@@ -124,6 +128,27 @@ Blockly.RenderedConnection.prototype.moveBy = function(dx, dy) {
 };
 
 /**
+ * Move this connection to the location given by its offset within the block and
+ * the coordinate of the block's top left corner.
+ * @param {!goog.math.Coordinate} blockTL The coordinate of the top left corner
+ *     of the block.
+ */
+Blockly.RenderedConnection.prototype.moveToOffset = function(blockTL) {
+  this.moveTo(blockTL.x + this.offsetInBlock_.x,
+      blockTL.y + this.offsetInBlock_.y);
+};
+
+/**
+ * Set the offset of this connection relative to the top left of its block.
+ * @param {number} x The new relative x.
+ * @param {number} y The new relative y.
+ */
+Blockly.RenderedConnection.prototype.setOffsetInBlock = function(x, y) {
+  this.offsetInBlock_.x = x;
+  this.offsetInBlock_.y = y;
+};
+
+/**
  * Move the blocks on either side of this connection right next to each other.
  * @private
  */
@@ -136,7 +161,7 @@ Blockly.RenderedConnection.prototype.tighten_ = function() {
     if (!svgRoot) {
       throw 'block is not rendered.';
     }
-    var xy = Blockly.getRelativeXY_(svgRoot);
+    var xy = Blockly.utils.getRelativeXY(svgRoot);
     block.getSvgRoot().setAttribute('transform',
         'translate(' + (xy.x - dx) + ',' + (xy.y - dy) + ')');
     block.moveConnections_(-dx, -dy);
@@ -161,18 +186,11 @@ Blockly.RenderedConnection.prototype.closest = function(maxLimit, dxy) {
  */
 Blockly.RenderedConnection.prototype.highlight = function() {
   var steps;
-  if (this.type == Blockly.INPUT_VALUE || this.type == Blockly.OUTPUT_VALUE) {
-    var tabWidth = this.sourceBlock_.RTL ? -Blockly.BlockSvg.TAB_WIDTH :
-        Blockly.BlockSvg.TAB_WIDTH;
-    steps = 'm 0,0 ' + Blockly.BlockSvg.TAB_PATH_DOWN + ' v 5';
-
-  } else {
-    steps = 'm -20,0 h 5 ' + Blockly.BlockSvg.NOTCH_PATH_LEFT + ' h 5';
-  }
+  steps = 'm -20,0 h 5 ' + Blockly.BlockSvg.NOTCH_PATH_LEFT + ' h 5';
   var xy = this.sourceBlock_.getRelativeToSurfaceXY();
   var x = this.x_ - xy.x;
   var y = this.y_ - xy.y;
-  Blockly.Connection.highlightedPath_ = Blockly.createSvgElement('path',
+  Blockly.Connection.highlightedPath_ = Blockly.utils.createSvgElement('path',
       {'class': 'blocklyHighlightedConnectionPath',
        'd': steps,
        transform: 'translate(' + x + ',' + y + ')' +
@@ -210,8 +228,8 @@ Blockly.RenderedConnection.prototype.unhideAll = function() {
       // Show all connections of this block.
       connections = block.getConnections_(true);
     }
-    for (var c = 0; c < connections.length; c++) {
-      renderList.push.apply(renderList, connections[c].unhideAll());
+    for (var i = 0; i < connections.length; i++) {
+      renderList.push.apply(renderList, connections[i].unhideAll());
     }
     if (!renderList.length) {
       // Leaf block.
@@ -251,17 +269,17 @@ Blockly.RenderedConnection.prototype.hideAll = function() {
   this.setHidden(true);
   if (this.targetConnection) {
     var blocks = this.targetBlock().getDescendants();
-    for (var b = 0; b < blocks.length; b++) {
-      var block = blocks[b];
+    for (var i = 0; i < blocks.length; i++) {
+      var block = blocks[i];
       // Hide all connections of all children.
       var connections = block.getConnections_(true);
-      for (var c = 0; c < connections.length; c++) {
-        connections[c].setHidden(true);
+      for (var j = 0; j < connections.length; j++) {
+        connections[j].setHidden(true);
       }
       // Close all bubbles of all children.
       var icons = block.getIcons();
-      for (var i = 0; i < icons.length; i++) {
-        icons[i].setVisible(false);
+      for (var j = 0; j < icons.length; j++) {
+        icons[j].setVisible(false);
       }
     }
   }
@@ -313,8 +331,8 @@ Blockly.RenderedConnection.prototype.respawnShadow_ = function() {
   // Respawn the shadow block if there is one.
   var shadow = this.getShadowDom();
   if (parentBlock.workspace && shadow && Blockly.Events.recordUndo) {
-    var blockShadow =
-        Blockly.RenderedConnection.superClass_.respawnShadow_.call(this);
+    Blockly.RenderedConnection.superClass_.respawnShadow_.call(this);
+    var blockShadow = this.targetBlock();
     if (!blockShadow) {
       throw 'Couldn\'t respawn the shadow block that should exist here.';
     }
@@ -367,5 +385,19 @@ Blockly.RenderedConnection.prototype.connect_ = function(childConnection) {
       // move its connected children into position.
       parentBlock.render();
     }
+  }
+};
+
+/**
+ * Function to be called when this connection's compatible types have changed.
+ * @private
+ */
+Blockly.RenderedConnection.prototype.onCheckChanged_ = function() {
+  // The new value type may not be compatible with the existing connection.
+  if (this.isConnected() && !this.checkType_(this.targetConnection)) {
+    var child = this.isSuperior() ? this.targetBlock() : this.sourceBlock_;
+    child.unplug();
+    // Bump away.
+    this.sourceBlock_.bumpNeighbours_();
   }
 };

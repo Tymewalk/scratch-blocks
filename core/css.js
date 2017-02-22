@@ -24,6 +24,10 @@
  */
 'use strict';
 
+/**
+ * @name Blockly.Css
+ * @namespace
+ */
 goog.provide('Blockly.Css');
 
 goog.require('Blockly.Colours');
@@ -98,9 +102,11 @@ Blockly.Css.inject = function(hasCss, pathToMedia) {
       );
     }
   }
-  // Inject CSS tag.
+
+  // Inject CSS tag at start of head.
   var cssNode = document.createElement('style');
-  document.head.appendChild(cssNode);
+  document.head.insertBefore(cssNode, document.head.firstChild);
+
   var cssTextNode = document.createTextNode(text);
   cssNode.appendChild(cssTextNode);
   Blockly.Css.styleSheet_ = cssNode.sheet;
@@ -121,7 +127,13 @@ Blockly.Css.setCursor = function(cursor) {
     return;
   }
   Blockly.Css.currentCursor_ = cursor;
-  var url = 'url(' + Blockly.Css.mediaPath_ + '/' + cursor + '.cur), auto';
+  var url;
+  if (cursor == Blockly.Css.Cursor.OPEN) {
+    // Scratch-specific: use CSS default cursor instead of "open hand."
+    url = 'default';
+  } else {
+    url = 'url(' + Blockly.Css.mediaPath_ + '/' + cursor + '.cur), auto';
+  }
   // There are potentially hundreds of draggable objects.  Changing their style
   // properties individually is too slow, so change the CSS rule instead.
   var rule = '.blocklyDraggable {\n  cursor: ' + url + ';\n}\n';
@@ -154,6 +166,8 @@ Blockly.Css.CONTENT = [
     'background-color: $colour_workspace;',
     'outline: none;',
     'overflow: hidden;',  /* IE overflows by default. */
+    'position: absolute;',
+    'display: block;',
   '}',
 
   /* Necessary to position the drag surface */
@@ -166,7 +180,20 @@ Blockly.Css.CONTENT = [
   '.blocklyWidgetDiv {',
     'display: none;',
     'position: absolute;',
-    'z-index: 999;',
+    'z-index: 99999;', /* big value for bootstrap3 compatibility */
+  '}',
+
+  '.injectionDiv {',
+    'height: 100%;',
+    'position: relative;',
+    'overflow: hidden;', /* So blocks in drag surface disappear at edges */
+  '}',
+
+  '.blocklyNonSelectable {',
+    'user-select: none;',
+    '-moz-user-select: none;',
+    '-webkit-user-select: none;',
+    '-ms-user-select: none;',
   '}',
 
   '.blocklyWidgetDiv.fieldTextInput {',
@@ -179,11 +206,34 @@ Blockly.Css.CONTENT = [
     '-webkit-transform-origin: 0 0;',
   '}',
 
+  '.blocklyTextDropDownArrow {',
+    'position: absolute;',
+  '}',
+
   '.blocklyNonSelectable {',
     'user-select: none;',
     '-moz-user-select: none;',
     '-webkit-user-select: none;',
     '-ms-user-select: none;',
+  '}',
+
+  '.blocklyWsDragSurface {',
+    'display: none;',
+    'position: absolute;',
+    'overflow: visible;',
+    'top: 0;',
+    'left: 0;',
+  '}',
+
+  '.blocklyBlockDragSurface {',
+    'display: none;',
+    'position: absolute;',
+    'top: 0;',
+    'left: 0;',
+    'right: 0;',
+    'bottom: 0;',
+    'overflow: visible !important;',
+    'z-index: 50;', /* Display below toolbox, but above everything else. */
   '}',
 
   '.blocklyTooltipDiv {',
@@ -192,31 +242,16 @@ Blockly.Css.CONTENT = [
     'box-shadow: 4px 4px 20px 1px rgba(0,0,0,.15);',
     'color: #000;',
     'display: none;',
-    'font-family: sans-serif;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
     'font-size: 9pt;',
     'opacity: 0.9;',
     'padding: 2px;',
     'position: absolute;',
-    'z-index: 1000;',
-  '}',
-
-  '.blocklyDragSurface {',
-    'display: none;',
-    'position: absolute;',
-    'top: 0;',
-    'left: 0;',
-    'right: 0;',
-    'bottom: 0;',
-    'overflow: visible !important;',
-    'z-index: 5000;', /* Always display on top */
-    '-webkit-backface-visibility: hidden;',
-    'backface-visibility: hidden;',
-    '-webkit-perspective: 1000;',
-    'perspective: 1000;',
+    'z-index: 100000;', /* big value for bootstrap3 compatibility */
   '}',
 
   '.blocklyDropDownDiv {',
-    'position: absolute;',
+    'position: fixed;',
     'left: 0;',
     'top: 0;',
     'z-index: 1000;',
@@ -228,6 +263,11 @@ Blockly.Css.CONTENT = [
     '-webkit-user-select: none;',
   '}',
 
+  '.blocklyDropDownContent {',
+    'max-height: 300px;', // @todo: spec for maximum height.
+    'overflow: auto;',
+  '}',
+
   '.blocklyDropDownArrow {',
     'position: absolute;',
     'left: 0;',
@@ -235,6 +275,8 @@ Blockly.Css.CONTENT = [
     'width: 16px;',
     'height: 16px;',
     'z-index: -1;',
+    'background-color: inherit;',
+    'border-color: inherit;',
   '}',
 
   '.blocklyDropDownButton {',
@@ -284,7 +326,7 @@ Blockly.Css.CONTENT = [
     'border: 1px solid $colour_numPadBorder;',
     'cursor: pointer;',
     'font-weight: 600;',
-    'font-family: sans-serif;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
     'font-size: 12pt;',
     '-webkit-tap-highlight-color: rgba(0,0,0,0);',
   '}',
@@ -304,12 +346,25 @@ Blockly.Css.CONTENT = [
     'border-top: 1px solid;',
     'border-left: 1px solid;',
     'border-top-left-radius: 4px;',
+    'border-color: inherit;',
   '}',
 
   '.arrowBottom {',
     'border-bottom: 1px solid;',
     'border-right: 1px solid;',
     'border-bottom-right-radius: 4px;',
+    'border-color: inherit;',
+  '}',
+
+  '.valueReportBox {',
+    'min-width: 50px;',
+    'max-width: 300px;',
+    'max-height: 200px;',
+    'overflow: auto;',
+    'word-wrap: break-word;',
+    'text-align: center;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
+    'font-size: .8em;',
   '}',
 
   '.blocklyResizeSE {',
@@ -350,12 +405,15 @@ Blockly.Css.CONTENT = [
     'stroke-opacity: .5;',
   '}',
 
+  '.blocklyInsertionMarker>.blocklyPath {',
+    'stroke: none;',
+  '}',
+
   '.blocklyText {',
-    'cursor: default;',
     'fill: #fff;',
-    'font-family: sans-serif;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
     'font-size: 12pt;',
-    'font-weight: 600;',
+    'font-weight: 500;',
   '}',
 
   '.blocklyTextTruncated {',
@@ -365,32 +423,53 @@ Blockly.Css.CONTENT = [
   '.blocklyNonEditableText>text {',
     'pointer-events: none;',
   '}',
-
-  '.blocklyNonEditableText>rect,',
-  '.blocklyEditableText>rect {',
-    'fill: #fff;',
-    'fill-opacity: .6;',
-  '}',
-
   '.blocklyNonEditableText>text,',
   '.blocklyEditableText>text {',
     'fill: $colour_text;',
   '}',
 
-  '.blocklyEditableText:hover>rect {',
-    'stroke: #fff;',
-    'stroke-width: 2;',
+  '.blocklyDropdownText {',
+    'fill: #fff !important;',
   '}',
 
   '.blocklyBubbleText {',
     'fill: $colour_text;',
   '}',
 
+  '.blocklyFlyout {',
+    'position: absolute;',
+    'z-index: 20;',
+  '}',
+  '.blocklyFlyoutButton {',
+    'fill: #888;',
+    'cursor: default;',
+  '}',
+
+  '.blocklyFlyoutButtonShadow {',
+    'fill: #666;',
+  '}',
+
+  '.blocklyFlyoutButton:hover {',
+    'fill: #aaa;',
+  '}',
+
+  '.blocklyFlyoutLabel {',
+    'cursor: default;',
+  '}',
+
+  '.blocklyFlyoutLabelBackground {',
+    'opacity: 0;',
+  '}',
+
+  '.blocklyFlyoutLabelText {',
+    'fill: #000;',
+  '}',
+
   /*
     Don't allow users to select text.  It gets annoying when trying to
     drag a block and selected text moves instead.
   */
-  '.blocklySvg text {',
+  '.blocklySvg text, .blocklyBlockDragSurface text {',
     'user-select: none;',
     '-moz-user-select: none;',
     '-webkit-user-select: none;',
@@ -439,17 +518,16 @@ Blockly.Css.CONTENT = [
 
   '.blocklyHtmlInput {',
     'border: none;',
-    'font-family: sans-serif;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
     'font-size: 12pt;',
     'height: 100%;',
     'margin: 0;',
     'outline: none;',
     'box-sizing: border-box;',
-    'padding: 2px 8px 0 8px;',
     'width: 100%;',
     'text-align: center;',
     'color: $colour_text;',
-    'font-weight: 600;',
+    'font-weight: 500;',
   '}',
 
   '.blocklyMainBackground {',
@@ -468,39 +546,44 @@ Blockly.Css.CONTENT = [
     'fill-opacity: .8;',
   '}',
 
+  '.blocklyMainWorkspaceScrollbar {',
+    'z-index: 20;',
+  '}',
+
+  '.blocklyFlyoutScrollbar {',
+    'z-index: 30;',
+  '}',
+
+  '.blocklyScrollbarHorizontal, .blocklyScrollbarVertical {',
+    'position: absolute;',
+    'outline: none;',
+  '}',
+
   '.blocklyScrollbarBackground {',
     'opacity: 0;',
   '}',
 
-  '.blocklyScrollbarKnob {',
+  '.blocklyScrollbarHandle {',
     'fill: $colour_scrollbar;',
   '}',
 
-  '.blocklyScrollbarBackground:hover+.blocklyScrollbarKnob,',
-  '.blocklyScrollbarKnob:hover {',
+  '.blocklyScrollbarBackground:hover+.blocklyScrollbarHandle,',
+  '.blocklyScrollbarHandle:hover {',
     'fill: $colour_scrollbarHover;',
   '}',
 
   '.blocklyZoom>image {',
-    'opacity: .4;',
-  '}',
-
-  '.blocklyZoom>image:hover {',
-    'opacity: .6;',
-  '}',
-
-  '.blocklyZoom>image:active {',
-    'opacity: .8;',
+    'opacity: 1;',
   '}',
 
   /* Darken flyout scrollbars due to being on a grey background. */
   /* By contrast, workspace scrollbars are on a white background. */
-  '.blocklyFlyout .blocklyScrollbarKnob {',
+  '.blocklyFlyout .blocklyScrollbarHandle {',
     'fill: #bbb;',
   '}',
 
-  '.blocklyFlyout .blocklyScrollbarBackground:hover+.blocklyScrollbarKnob,',
-  '.blocklyFlyout .blocklyScrollbarKnob:hover {',
+  '.blocklyFlyout .blocklyScrollbarBackground:hover+.blocklyScrollbarHandle,',
+  '.blocklyFlyout .blocklyScrollbarHandle:hover {',
     'fill: #aaa;',
   '}',
 
@@ -556,6 +639,8 @@ Blockly.Css.CONTENT = [
     'overflow-x: visible;',
     'overflow-y: auto;',
     'position: absolute;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
+    'z-index: 70;', /* so blocks go under toolbox when dragging */
   '}',
 
   '.blocklyTreeRoot {',
@@ -576,12 +661,12 @@ Blockly.Css.CONTENT = [
 
   '.blocklyHorizontalTree {',
     'float: left;',
-    'margin: 1px 5px 8px 0px;',
+    'margin: 1px 5px 8px 0;',
   '}',
 
   '.blocklyHorizontalTreeRtl {',
     'float: right;',
-    'margin: 1px 0px 8px 5px;',
+    'margin: 1px 0 8px 5px;',
   '}',
 
   '.blocklyToolboxDiv[dir="RTL"] .blocklyTreeRow {',
@@ -594,13 +679,13 @@ Blockly.Css.CONTENT = [
 
   '.blocklyTreeSeparator {',
     'border-bottom: solid #e5e5e5 1px;',
-    'height: 0px;',
+    'height: 0;',
     'margin: 5px 0;',
   '}',
 
   '.blocklyTreeSeparatorHorizontal {',
     'border-right: solid #e5e5e5 1px;',
-    'width: 0px;',
+    'width: 0;',
     'padding: 5px 0;',
     'margin: 0 5px;',
   '}',
@@ -643,7 +728,7 @@ Blockly.Css.CONTENT = [
 
   '.blocklyTreeLabel {',
     'cursor: default;',
-    'font-family: sans-serif;',
+    'font-family: "Helvetica Neue", Helvetica, sans-serif;',
     'font-size: 16px;',
     'padding: 0 3px;',
     'vertical-align: middle;',
@@ -673,7 +758,6 @@ Blockly.Css.CONTENT = [
   '}',
 
   '.blocklyWidgetDiv .goog-palette-table {',
-    'border: 1px solid #666;',
     'border-collapse: collapse;',
   '}',
 
@@ -684,7 +768,6 @@ Blockly.Css.CONTENT = [
     'border: 0;',
     'text-align: center;',
     'vertical-align: middle;',
-    'border-right: 1px solid #666;',
     'font-size: 1px;',
   '}',
 
@@ -692,15 +775,16 @@ Blockly.Css.CONTENT = [
     'position: relative;',
     'height: 13px;',
     'width: 15px;',
-    'border: 1px solid #666;',
   '}',
 
   '.blocklyWidgetDiv .goog-palette-cell-hover .goog-palette-colorswatch {',
     'border: 1px solid #FFF;',
+    'box-sizing: border-box;',
   '}',
 
   '.blocklyWidgetDiv .goog-palette-cell-selected .goog-palette-colorswatch {',
     'border: 1px solid #000;',
+    'box-sizing: border-box;',
     'color: #fff;',
   '}',
 
@@ -724,7 +808,7 @@ Blockly.Css.CONTENT = [
     'border-style: solid;',
     'border-width: 1px;',
     'cursor: default;',
-    'font: normal 13px Arial, sans-serif;',
+    'font: normal 13px "Helvetica Neue", Helvetica, sans-serif;',
     'margin: 0;',
     'outline: none;',
     'padding: 4px 0;',
@@ -732,6 +816,13 @@ Blockly.Css.CONTENT = [
     'overflow-y: auto;',
     'overflow-x: hidden;',
     'max-height: 100%;',
+    'z-index: 20000;',  /* Arbitrary, but some apps depend on it... */
+  '}',
+
+  '.blocklyDropDownDiv .goog-menu {',
+    'cursor: default;',
+    'font: normal 13px "Helvetica Neue", Helvetica, sans-serif;',
+    'outline: none;',
     'z-index: 20000;',  /* Arbitrary, but some apps depend on it... */
   '}',
 
@@ -766,7 +857,18 @@ Blockly.Css.CONTENT = [
    */
   '.blocklyWidgetDiv .goog-menuitem {',
     'color: #000;',
-    'font: normal 13px Arial, sans-serif;',
+    'font: normal 13px "Helvetica Neue", Helvetica, sans-serif;',
+    'list-style: none;',
+    'margin: 0;',
+     /* 28px on the left for icon or checkbox; 7em on the right for shortcut. */
+    'padding: 4px 7em 4px 28px;',
+    'white-space: nowrap;',
+  '}',
+
+  '.blocklyDropDownDiv .goog-menuitem {',
+    'color: #fff;',
+    'font: normal 13px "Helvetica Neue", Helvetica, sans-serif;',
+    'font-weight: bold;',
     'list-style: none;',
     'margin: 0;',
      /* 28px on the left for icon or checkbox; 7em on the right for shortcut. */
@@ -776,7 +878,8 @@ Blockly.Css.CONTENT = [
 
   /* BiDi override for the resting state. */
   /* #noflip */
-  '.blocklyWidgetDiv .goog-menuitem.goog-menuitem-rtl {',
+  '.blocklyWidgetDiv .goog-menuitem.goog-menuitem-rtl, ',
+  '.blocklyDropDownDiv .goog-menuitem.goog-menuitem-rtl {',
      /* Flip left/right padding for BiDi. */
     'padding-left: 7em;',
     'padding-right: 28px;',
@@ -784,7 +887,9 @@ Blockly.Css.CONTENT = [
 
   /* If a menu doesn't have checkable items or items with icons, remove padding. */
   '.blocklyWidgetDiv .goog-menu-nocheckbox .goog-menuitem,',
-  '.blocklyWidgetDiv .goog-menu-noicon .goog-menuitem {',
+  '.blocklyWidgetDiv .goog-menu-noicon .goog-menuitem, ',
+  '.blocklyDropDownDiv .goog-menu-nocheckbox .goog-menuitem,',
+  '.blocklyDropDownDiv .goog-menu-noicon .goog-menuitem { ',
     'padding-left: 12px;',
   '}',
 
@@ -792,22 +897,27 @@ Blockly.Css.CONTENT = [
    * If a menu doesn't have items with shortcuts, leave just enough room for
    * submenu arrows, if they are rendered.
    */
-  '.blocklyWidgetDiv .goog-menu-noaccel .goog-menuitem {',
+  '.blocklyWidgetDiv .goog-menu-noaccel .goog-menuitem, ',
+  '.blocklyDropDownDiv .goog-menu-noaccel .goog-menuitem {',
     'padding-right: 20px;',
   '}',
 
-  '.blocklyWidgetDiv .goog-menuitem-content {',
+  '.blocklyWidgetDiv .goog-menuitem-content ',
+  '.blocklyDropDownDiv .goog-menuitem-content {',
     'color: #000;',
-    'font: normal 13px Arial, sans-serif;',
+    'font: normal 13px "Helvetica Neue", Helvetica, sans-serif;',
   '}',
 
   /* State: disabled. */
   '.blocklyWidgetDiv .goog-menuitem-disabled .goog-menuitem-accel,',
-  '.blocklyWidgetDiv .goog-menuitem-disabled .goog-menuitem-content {',
+  '.blocklyWidgetDiv .goog-menuitem-disabled .goog-menuitem-content, ',
+  '.blocklyDropDownDiv .goog-menuitem-disabled .goog-menuitem-accel,',
+  '.blocklyDropDownDiv .goog-menuitem-disabled .goog-menuitem-content {',
     'color: #ccc !important;',
   '}',
 
-  '.blocklyWidgetDiv .goog-menuitem-disabled .goog-menuitem-icon {',
+  '.blocklyWidgetDiv .goog-menuitem-disabled .goog-menuitem-icon, ',
+  '.blocklyDropDownDiv .goog-menuitem-disabled .goog-menuitem-icon {',
     'opacity: 0.3;',
     '-moz-opacity: 0.3;',
     'filter: alpha(opacity=30);',
@@ -826,9 +936,16 @@ Blockly.Css.CONTENT = [
     'padding-top: 3px;',
   '}',
 
+  '.blocklyDropDownDiv .goog-menuitem-highlight,',
+  '.blocklyDropDownDiv .goog-menuitem-hover {',
+    'background-color: rgba(0, 0, 0, 0.2);',
+  '}',
+
   /* State: selected/checked. */
   '.blocklyWidgetDiv .goog-menuitem-checkbox,',
-  '.blocklyWidgetDiv .goog-menuitem-icon {',
+  '.blocklyWidgetDiv .goog-menuitem-icon, ',
+  '.blocklyDropDownDiv .goog-menuitem-checkbox,',
+  '.blocklyDropDownDiv .goog-menuitem-icon {',
     'background-repeat: no-repeat;',
     'height: 16px;',
     'left: 6px;',
@@ -838,23 +955,31 @@ Blockly.Css.CONTENT = [
     'width: 16px;',
   '}',
 
+  '.blocklyWidgetDiv .goog-option-selected .goog-menuitem-checkbox,',
+  '.blocklyWidgetDiv .goog-option-selected .goog-menuitem-icon,',
+  '.blocklyDropDownDiv .goog-option-selected .goog-menuitem-checkbox,',
+  '.blocklyDropDownDiv .goog-option-selected .goog-menuitem-icon {',
+     /* Client apps may override the URL at which they serve the sprite. */
+    'background: url(<<<PATH>>>/sprites.png) no-repeat -48px -16px !important;',
+    'position: static;', /* Scroll with the menu. */
+    'float: left;',
+    'margin-left: -24px;',
+  '}',
+
   /* BiDi override for the selected/checked state. */
   /* #noflip */
   '.blocklyWidgetDiv .goog-menuitem-rtl .goog-menuitem-checkbox,',
-  '.blocklyWidgetDiv .goog-menuitem-rtl .goog-menuitem-icon {',
+  '.blocklyWidgetDiv .goog-menuitem-rtl .goog-menuitem-icon,',
+  '.blocklyDropDownDiv .goog-menuitem-rtl .goog-menuitem-checkbox,',
+  '.blocklyDropDownDiv .goog-menuitem-rtl .goog-menuitem-icon {',
      /* Flip left/right positioning. */
-    'left: auto;',
-    'right: 6px;',
-  '}',
-
-  '.blocklyWidgetDiv .goog-option-selected .goog-menuitem-checkbox,',
-  '.blocklyWidgetDiv .goog-option-selected .goog-menuitem-icon {',
-     /* Client apps may override the URL at which they serve the sprite. */
-    'background: url(//ssl.gstatic.com/editor/editortoolbar.png) no-repeat -512px 0;',
+     'float: right;',
+     'margin-left: 6px;',
   '}',
 
   /* Keyboard shortcut ("accelerator") style. */
-  '.blocklyWidgetDiv .goog-menuitem-accel {',
+  '.blocklyWidgetDiv .goog-menuitem-accel, ',
+  '.blocklyDropDownDiv .goog-menuitem-accel {',
     'color: #999;',
      /* Keyboard shortcuts are untranslated; always left-to-right. */
      /* #noflip */
@@ -868,7 +993,8 @@ Blockly.Css.CONTENT = [
 
   /* BiDi override for shortcut style. */
   /* #noflip */
-  '.blocklyWidgetDiv .goog-menuitem-rtl .goog-menuitem-accel {',
+  '.blocklyWidgetDiv .goog-menuitem-rtl .goog-menuitem-accel, ',
+  '.blocklyDropDownDiv .goog-menuitem-rtl .goog-menuitem-accel {',
      /* Flip left/right positioning and text alignment. */
     'left: 0;',
     'right: auto;',
@@ -876,11 +1002,13 @@ Blockly.Css.CONTENT = [
   '}',
 
   /* Mnemonic styles. */
-  '.blocklyWidgetDiv .goog-menuitem-mnemonic-hint {',
+  '.blocklyWidgetDiv .goog-menuitem-mnemonic-hint, ',
+  '.blocklyDropDownDiv .goog-menuitem-mnemonic-hint {',
     'text-decoration: underline;',
   '}',
 
-  '.blocklyWidgetDiv .goog-menuitem-mnemonic-separator {',
+  '.blocklyWidgetDiv .goog-menuitem-mnemonic-separator, ',
+  '.blocklyDropDownDiv .goog-menuitem-mnemonic-separator {',
     'color: #999;',
     'font-size: 12px;',
     'padding-left: 4px;',
@@ -900,11 +1028,67 @@ Blockly.Css.CONTENT = [
    * @author attila@google.com (Attila Bodis)
    */
 
-  '.blocklyWidgetDiv .goog-menuseparator {',
+  '.blocklyWidgetDiv .goog-menuseparator, ',
+  '.blocklyDropDownDiv .goog-menuseparator {',
     'border-top: 1px solid #ccc;',
     'margin: 4px 0;',
     'padding: 0;',
   '}',
 
+  '.blocklyFlyoutCheckbox {',
+    'fill: red;',
+  '}',
+
+  '.blocklyFlyoutCheckbox.checked {',
+    'fill: blue;',
+  '}',
+
+  '.scratchCategoryMenu {',
+    'width: 250px;',
+    'background: $colour_toolbox;',
+    'color: $colour_toolboxText;',
+    'font-size: .9em;',
+    'user-select: none;',
+    '-webkit-user-select: none;',
+    '-moz-user-select: none;',
+    '-ms-user-select: none;',
+  '}',
+
+  '.scratchCategoryRow {',
+    'width: 50%;',
+  '}',
+
+  '.scratchCategoryMenuItem {',
+    'padding: 4px;',
+    'width: 50%;',
+    'cursor: pointer;',
+  '}',
+
+  '.scratchCategoryMenuItem.categorySelected {',
+    'background: $colour_toolboxSelected;',
+    'border-radius: 16px;',
+  '}',
+
+  '.scratchCategoryItemBubbleLTR {',
+    'width: 14px;',
+    'height: 14px;',
+    'border: 1px solid;',
+    'border-radius: 8px;',
+    'float: left;',
+    'margin-right: 8px;',
+  '}',
+
+  '.scratchCategoryItemBubbleRTL {',
+    'width: 14px;',
+    'height: 14px;',
+    'border: 1px solid;',
+    'border-radius: 8px;',
+    'float: right;',
+    'margin-left: 8px;',
+  '}',
+
+  '.scratchCategoryMenuItem:hover {',
+    'color: $colour_toolboxHover !important;',
+  '}',
   ''
 ];
