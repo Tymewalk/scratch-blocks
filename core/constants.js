@@ -30,18 +30,12 @@ goog.provide('Blockly.constants');
 /**
  * Number of pixels the mouse must move before a drag starts.
  */
-Blockly.DRAG_RADIUS = 3;
+Blockly.DRAG_RADIUS = 5;
 
 /**
  * Maximum misalignment between connections for them to snap together.
  */
-Blockly.SNAP_RADIUS = 48;
-
-/**
- * Maximum misalignment between connections for them to snap together,
- * when a connection is already highlighted.
- */
-Blockly.CONNECTING_SNAP_RADIUS = 96;
+Blockly.SNAP_RADIUS = 72;
 
 /**
  * How much to prefer staying connected to the current connection over moving to
@@ -53,7 +47,7 @@ Blockly.CURRENT_CONNECTION_PREFERENCE = 20;
 /**
  * Delay in ms between trigger and bumping unconnected block out of alignment.
  */
-Blockly.BUMP_DELAY = 0;
+Blockly.BUMP_DELAY = 250;
 
 /**
  * Number of characters to truncate a collapsed block to.
@@ -64,12 +58,6 @@ Blockly.COLLAPSE_CHARS = 30;
  * Length in ms for a touch to become a long press.
  */
 Blockly.LONGPRESS = 750;
-
-/**
- * Prevent a sound from playing if another sound preceded it within this many
- * miliseconds.
- */
-Blockly.SOUND_LIMIT = 100;
 
 /**
  * The richness of block colours, regardless of the hue.
@@ -167,14 +155,7 @@ Blockly.DRAG_NONE = 0;
 Blockly.DRAG_STICKY = 1;
 
 /**
- * ENUM for inside the non-sticky DRAG_RADIUS, for differentiating between
- * clicks and drags.
- * @const
- */
-Blockly.DRAG_BEGIN = 1;
-
-/**
- * ENUM for freely draggable (outside the DRAG_RADIUS, if one applies).
+ * ENUM for freely draggable.
  * @const
  */
 Blockly.DRAG_FREE = 2;
@@ -212,81 +193,3 @@ Blockly.TOOLBOX_AT_LEFT = 2;
  * @const
  */
 Blockly.TOOLBOX_AT_RIGHT = 3;
-
-/**
- * ENUM for output shape: hexagonal (booleans/predicates).
- * @const
- */
-Blockly.OUTPUT_SHAPE_HEXAGONAL = 1;
-
-/**
- * ENUM for output shape: rounded (numbers).
- * @const
- */
-Blockly.OUTPUT_SHAPE_ROUND = 2;
-
-/**
- * ENUM for output shape: squared (any/all values; strings).
- * @const
- */
-Blockly.OUTPUT_SHAPE_SQUARE = 3;
-
-/**
- * Radius of stack glow, in px.
- * @type {number}
- * @const
- */
-Blockly.STACK_GLOW_RADIUS = 1.3;
-
-/**
- * Radius of replacement glow, in px.
- * @type {number}
- * @const
- */
-Blockly.REPLACEMENT_GLOW_RADIUS = 2;
-
-/**
- * ENUM for categories.
- * @const
- */
-Blockly.Categories = {
-  "motion": "motion",
-  "looks": "looks",
-  "sound": "sounds",
-  "pen": "pen",
-  "data": "data",
-  "event": "events",
-  "control": "control",
-  "sensing": "sensing",
-  "operators": "operators",
-  "more": "more"
-};
-
-/**
- * ENUM representing that an event is in the delete area of the trash can.
- * @const
- */
-Blockly.DELETE_AREA_TRASH = 1;
-
-/**
- * ENUM representing that an event is in the delete area of the toolbox or
- * flyout.
- * @const
- */
-Blockly.DELETE_AREA_TOOLBOX = 2;
-
-/**
- * String for use in the "custom" attribute of a category in toolbox xml.
- * This string indicates that the category should be dynamically populated with
- * variable blocks.
- * @const {string}
- */
-Blockly.VARIABLE_CATEGORY_NAME = 'VARIABLE';
-
-/**
- * String for use in the "custom" attribute of a category in toolbox xml.
- * This string indicates that the category should be dynamically populated with
- * procedure blocks.
- * @const {string}
- */
-Blockly.PROCEDURE_CATEGORY_NAME = 'PROCEDURE';

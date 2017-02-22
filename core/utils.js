@@ -26,13 +26,8 @@
  */
 'use strict';
 
-/**
- * @name Blockly.utils
- * @namespace
- **/
 goog.provide('Blockly.utils');
 
-goog.require('Blockly.Touch');
 goog.require('goog.dom');
 goog.require('goog.events.BrowserFeature');
 goog.require('goog.math.Coordinate');
@@ -51,18 +46,16 @@ Blockly.cache3dSupported_ = null;
  * Similar to Closure's goog.dom.classes.add, except it handles SVG elements.
  * @param {!Element} element DOM element to add class to.
  * @param {string} className Name of class to add.
- * @return {boolean} True if class was added, false if already present.
+ * @private
  */
-Blockly.utils.addClass = function(element, className) {
+Blockly.addClass_ = function(element, className) {
   var classes = element.getAttribute('class') || '';
-  if ((' ' + classes + ' ').indexOf(' ' + className + ' ') != -1) {
-    return false;
+  if ((' ' + classes + ' ').indexOf(' ' + className + ' ') == -1) {
+    if (classes) {
+      classes += ' ';
+    }
+    element.setAttribute('class', classes + className);
   }
-  if (classes) {
-    classes += ' ';
-  }
-  element.setAttribute('class', classes + className);
-  return true;
 };
 
 /**
@@ -70,26 +63,24 @@ Blockly.utils.addClass = function(element, className) {
  * Similar to Closure's goog.dom.classes.remove, except it handles SVG elements.
  * @param {!Element} element DOM element to remove class from.
  * @param {string} className Name of class to remove.
- * @return {boolean} True if class was removed, false if never present.
+ * @private
  */
-Blockly.utils.removeClass = function(element, className) {
+Blockly.removeClass_ = function(element, className) {
   var classes = element.getAttribute('class');
-  if ((' ' + classes + ' ').indexOf(' ' + className + ' ') == -1) {
-    return false;
-  }
-  var classList = classes.split(/\s+/);
-  for (var i = 0; i < classList.length; i++) {
-    if (!classList[i] || classList[i] == className) {
-      classList.splice(i, 1);
-      i--;
+  if ((' ' + classes + ' ').indexOf(' ' + className + ' ') != -1) {
+    var classList = classes.split(/\s+/);
+    for (var i = 0; i < classList.length; i++) {
+      if (!classList[i] || classList[i] == className) {
+        classList.splice(i, 1);
+        i--;
+      }
+    }
+    if (classList.length) {
+      element.setAttribute('class', classList.join(' '));
+    } else {
+      element.removeAttribute('class');
     }
   }
-  if (classList.length) {
-    element.setAttribute('class', classList.join(' '));
-  } else {
-    element.removeAttribute('class');
-  }
-  return true;
 };
 
 /**
@@ -100,16 +91,90 @@ Blockly.utils.removeClass = function(element, className) {
  * @return {boolean} True if class exists, false otherwise.
  * @private
  */
-Blockly.utils.hasClass = function(element, className) {
+Blockly.hasClass_ = function(element, className) {
   var classes = element.getAttribute('class');
   return (' ' + classes + ' ').indexOf(' ' + className + ' ') != -1;
+};
+
+/**
+ * Bind an event to a function call.
+ * @param {!Node} node Node upon which to listen.
+ * @param {string} name Event name to listen to (e.g. 'mousedown').
+ * @param {Object} thisObject The value of 'this' in the function.
+ * @param {!Function} func Function to call when event is triggered.
+ * @return {!Array.<!Array>} Opaque data that can be passed to unbindEvent_.
+ * @private
+ */
+Blockly.bindEvent_ = function(node, name, thisObject, func) {
+  if (thisObject) {
+    var wrapFunc = function(e) {
+      func.call(thisObject, e);
+    };
+  } else {
+    var wrapFunc = func;
+  }
+  node.addEventListener(name, wrapFunc, false);
+  var bindData = [[node, name, wrapFunc]];
+  // Add equivalent touch event.
+  if (name in Blockly.bindEvent_.TOUCH_MAP) {
+    wrapFunc = function(e) {
+      // Punt on multitouch events.
+      if (e.changedTouches.length == 1) {
+        // Map the touch event's properties to the event.
+        var touchPoint = e.changedTouches[0];
+        e.clientX = touchPoint.clientX;
+        e.clientY = touchPoint.clientY;
+      }
+      func.call(thisObject, e);
+      // Stop the browser from scrolling/zooming the page.
+      e.preventDefault();
+    };
+    for (var i = 0, eventName;
+         eventName = Blockly.bindEvent_.TOUCH_MAP[name][i]; i++) {
+      node.addEventListener(eventName, wrapFunc, false);
+      bindData.push([node, eventName, wrapFunc]);
+    }
+  }
+  return bindData;
+};
+
+/**
+ * The TOUCH_MAP lookup dictionary specifies additional touch events to fire,
+ * in conjunction with mouse events.
+ * @type {Object}
+ */
+Blockly.bindEvent_.TOUCH_MAP = {};
+if (goog.events.BrowserFeature.TOUCH_ENABLED) {
+  Blockly.bindEvent_.TOUCH_MAP = {
+    'mousedown': ['touchstart'],
+    'mousemove': ['touchmove'],
+    'mouseup': ['touchend', 'touchcancel']
+  };
+}
+
+/**
+ * Unbind one or more events event from a function call.
+ * @param {!Array.<!Array>} bindData Opaque data from bindEvent_.  This list is
+ *     emptied during the course of calling this function.
+ * @return {!Function} The function call.
+ * @private
+ */
+Blockly.unbindEvent_ = function(bindData) {
+  while (bindData.length) {
+    var bindDatum = bindData.pop();
+    var node = bindDatum[0];
+    var name = bindDatum[1];
+    var func = bindDatum[2];
+    node.removeEventListener(name, func, false);
+  }
+  return func;
 };
 
 /**
  * Don't do anything for this event, just halt propagation.
  * @param {!Event} e An event.
  */
-Blockly.utils.noEvent = function(e) {
+Blockly.noEvent = function(e) {
   // This event has been handled.  No need to bubble up to the document.
   e.preventDefault();
   e.stopPropagation();
@@ -119,8 +184,9 @@ Blockly.utils.noEvent = function(e) {
  * Is this event targeting a text input widget?
  * @param {!Event} e An event.
  * @return {boolean} True if text input.
+ * @private
  */
-Blockly.utils.isTargetInput = function(e) {
+Blockly.isTargetInput_ = function(e) {
   return e.target.type == 'textarea' || e.target.type == 'text' ||
          e.target.type == 'number' || e.target.type == 'email' ||
          e.target.type == 'password' || e.target.type == 'search' ||
@@ -133,8 +199,9 @@ Blockly.utils.isTargetInput = function(e) {
  * its parent.  Only for SVG elements and children (e.g. rect, g, path).
  * @param {!Element} element SVG element to find the coordinates of.
  * @return {!goog.math.Coordinate} Object with .x and .y properties.
+ * @private
  */
-Blockly.utils.getRelativeXY = function(element) {
+Blockly.getRelativeXY_ = function(element) {
   var xy = new goog.math.Coordinate(0, 0);
   // First, check for x and y attributes.
   var x = element.getAttribute('x');
@@ -147,22 +214,20 @@ Blockly.utils.getRelativeXY = function(element) {
   }
   // Second, check for transform="translate(...)" attribute.
   var transform = element.getAttribute('transform');
-  var r = transform && transform.match(Blockly.utils.getRelativeXY.XY_REGEX_);
-  if (r) {
-    xy.x += parseFloat(r[1]);
-    if (r[3]) {
-      xy.y += parseFloat(r[3]);
+  if (transform) {
+    var transformComponents = transform.match(Blockly.getRelativeXY_.XY_REGEXP_);
+    if (transformComponents) {
+      xy.x += parseFloat(transformComponents[1]);
+      if (transformComponents[3]) {
+        xy.y += parseFloat(transformComponents[3]);
+      }
     }
   }
 
-  // Then check for style = transform: translate(...) or translate3d(...)
+  // Third, check for style="transform: translate3d(...)".
   var style = element.getAttribute('style');
-  if (style && style.indexOf('translate') > -1) {
-    var styleComponents = style.match(Blockly.utils.getRelativeXY.XY_2D_REGEX_);
-    // Try transform3d if 2d transform wasn't there.
-    if (!styleComponents) {
-      styleComponents = style.match(Blockly.utils.getRelativeXY.XY_3D_REGEX_);
-    }
+  if (style && style.indexOf('translate3d') > -1) {
+    var styleComponents = style.match(Blockly.getRelativeXY_.XY_3D_REGEXP_);
     if (styleComponents) {
       xy.x += parseFloat(styleComponents[1]);
       if (styleComponents[3]) {
@@ -170,52 +235,8 @@ Blockly.utils.getRelativeXY = function(element) {
       }
     }
   }
+
   return xy;
-};
-
-/**
- * Return the coordinates of the top-left corner of this element relative to
- * the div blockly was injected into.
- * @param {!Element} element SVG element to find the coordinates of. If this is
- *     not a child of the div blockly was injected into, the behaviour is
- *     undefined.
- * @return {!goog.math.Coordinate} Object with .x and .y properties.
- */
-Blockly.utils.getInjectionDivXY_ = function(element) {
-  var x = 0;
-  var y = 0;
-  var scale = 1;
-  while (element) {
-    var xy = Blockly.utils.getRelativeXY(element);
-    var scale = Blockly.utils.getScale_(element);
-    x = (x * scale) + xy.x;
-    y = (y * scale) + xy.y;
-    var classes = element.getAttribute('class') || '';
-    if ((' ' + classes + ' ').indexOf(' injectionDiv ') != -1) {
-      break;
-    }
-    element = element.parentNode;
-  }
-  return new goog.math.Coordinate(x, y);
-};
-
-/**
- * Return the scale of this element.
- * @param {!Element} element  The element to find the coordinates of.
- * @return {!number} number represending the scale applied to the element.
- * @private
- */
-Blockly.utils.getScale_ = function(element) {
-  var scale = 1;
-  var transform = element.getAttribute('transform');
-  if (transform) {
-    var transformComponents =
-        transform.match(Blockly.utils.getScale_.REGEXP_);
-    if (transformComponents && transformComponents[0]) {
-      scale = parseFloat(transformComponents[0]);
-    }
-  }
-  return scale;
 };
 
 /**
@@ -227,17 +248,8 @@ Blockly.utils.getScale_ = function(element) {
  * @type {!RegExp}
  * @private
  */
-Blockly.utils.getRelativeXY.XY_REGEX_ =
+Blockly.getRelativeXY_.XY_REGEXP_ =
     /translate\(\s*([-+\d.e]+)([ ,]\s*([-+\d.e]+)\s*\))?/;
-
-
-/**
- * Static regex to pull the scale values out of a transform style property.
- * Accounts for same exceptions as XY_REGEXP_.
- * @type {!RegExp}
- * @private
- */
-Blockly.utils.getScale_REGEXP_ = /scale\(\s*([-+\d.e]+)\s*\)/;
 
 /**
  * Static regex to pull the x,y,z values out of a translate3d() style property.
@@ -245,26 +257,92 @@ Blockly.utils.getScale_REGEXP_ = /scale\(\s*([-+\d.e]+)\s*\)/;
  * @type {!RegExp}
  * @private
  */
-Blockly.utils.getRelativeXY.XY_3D_REGEX_ =
+Blockly.getRelativeXY_.XY_3D_REGEXP_ =
   /transform:\s*translate3d\(\s*([-+\d.e]+)px([ ,]\s*([-+\d.e]+)\s*)px([ ,]\s*([-+\d.e]+)\s*)px\)?/;
 
 /**
- * Static regex to pull the x,y,z values out of a translate3d() style property.
- * Accounts for same exceptions as XY_REGEXP_.
- * @type {!RegExp}
+ * Return the absolute coordinates of the top-left corner of this element,
+ * scales that after canvas SVG element, if it's a descendant.
+ * The origin (0,0) is the top-left corner of the Blockly SVG.
+ * @param {!Element} element Element to find the coordinates of.
+ * @param {!Blockly.Workspace} workspace Element must be in this workspace.
+ * @return {!goog.math.Coordinate} Object with .x and .y properties.
  * @private
  */
-Blockly.utils.getRelativeXY.XY_2D_REGEX_ =
-  /transform:\s*translate\(\s*([-+\d.e]+)px([ ,]\s*([-+\d.e]+)\s*)px\)?/;
+Blockly.getSvgXY_ = function(element, workspace) {
+  var x = 0;
+  var y = 0;
+  var scale = 1;
+  if (goog.dom.contains(workspace.getCanvas(), element) ||
+      goog.dom.contains(workspace.getBubbleCanvas(), element)) {
+    // Before the SVG canvas, scale the coordinates.
+    scale = workspace.scale;
+  }
+  do {
+    // Loop through this block and every parent.
+    var xy = Blockly.getRelativeXY_(element);
+    if (element == workspace.getCanvas() ||
+        element == workspace.getBubbleCanvas()) {
+      // After the SVG canvas, don't scale the coordinates.
+      scale = 1;
+    }
+    x += xy.x * scale;
+    y += xy.y * scale;
+    element = element.parentNode;
+  } while (element && element != workspace.getParentSvg());
+  return new goog.math.Coordinate(x, y);
+};
+
+/**
+ * Check if 3D transforms are supported by adding an element
+ * and attempting to set the property.
+ * @return {boolean} true if 3D transforms are supported
+ */
+Blockly.is3dSupported = function() {
+  if (Blockly.cache3dSupported_ !== null) {
+    return Blockly.cache3dSupported_;
+  }
+  // CC-BY-SA Lorenzo Polidori
+  // https://stackoverflow.com/questions/5661671/detecting-transform-translate3d-support
+  if (!window.getComputedStyle) {
+    return false;
+  }
+
+  var el = document.createElement('p'),
+    has3d,
+    transforms = {
+    'webkitTransform':'-webkit-transform',
+    'OTransform':'-o-transform',
+    'msTransform':'-ms-transform',
+    'MozTransform':'-moz-transform',
+    'transform':'transform'
+  };
+
+  // Add it to the body to get the computed style.
+  document.body.insertBefore(el, null);
+
+  for (var t in transforms) {
+    if (el.style[t] !== undefined) {
+      el.style[t] = "translate3d(1px,1px,1px)";
+      has3d = window.getComputedStyle(el).getPropertyValue(transforms[t]);
+    }
+  }
+
+  document.body.removeChild(el);
+  Blockly.cache3dSupported_ = (has3d !== undefined && has3d.length > 0 && has3d !== "none");
+  return Blockly.cache3dSupported_;
+};
 
 /**
  * Helper method for creating SVG elements.
  * @param {string} name Element's tag name.
  * @param {!Object} attrs Dictionary of attribute names and values.
  * @param {Element} parent Optional parent on which to append the element.
+ * @param {Blockly.Workspace=} opt_workspace Optional workspace for access to
+ *     context (scale...).
  * @return {!SVGElement} Newly created SVG element.
  */
-Blockly.utils.createSvgElement = function(name, attrs, parent) {
+Blockly.createSvgElement = function(name, attrs, parent, opt_workspace) {
   var e = /** @type {!SVGElement} */ (
       document.createElementNS(Blockly.SVG_NS, name));
   for (var key in attrs) {
@@ -287,7 +365,7 @@ Blockly.utils.createSvgElement = function(name, attrs, parent) {
  * @param {!Event} e Mouse event.
  * @return {boolean} True if right-click.
  */
-Blockly.utils.isRightButton = function(e) {
+Blockly.isRightButton = function(e) {
   if (e.ctrlKey && goog.userAgent.MAC) {
     // Control-clicking on Mac OS X is treated as a right-click.
     // WebKit on Mac OS X fails to change button to 2 (but Gecko does).
@@ -298,20 +376,17 @@ Blockly.utils.isRightButton = function(e) {
 
 /**
  * Return the converted coordinates of the given mouse event.
- * The origin (0,0) is the top-left corner of the Blockly SVG.
+ * The origin (0,0) is the top-left corner of the Blockly svg.
  * @param {!Event} e Mouse event.
  * @param {!Element} svg SVG element.
- * @param {SVGMatrix} matrix Inverted screen CTM to use.
  * @return {!Object} Object with .x and .y properties.
  */
-Blockly.utils.mouseToSvg = function(e, svg, matrix) {
+Blockly.mouseToSvg = function(e, svg) {
   var svgPoint = svg.createSVGPoint();
   svgPoint.x = e.clientX;
   svgPoint.y = e.clientY;
-
-  if (!matrix) {
-    matrix = svg.getScreenCTM().inverse();
-  }
+  var matrix = svg.getScreenCTM();
+  matrix = matrix.inverse();
   return svgPoint.matrixTransform(matrix);
 };
 
@@ -320,13 +395,15 @@ Blockly.utils.mouseToSvg = function(e, svg, matrix) {
  * @param {!Array.<string>} array Array of strings.
  * @return {number} Length of shortest string.
  */
-Blockly.utils.shortestStringLength = function(array) {
+Blockly.shortestStringLength = function(array) {
   if (!array.length) {
     return 0;
   }
-  return array.reduce(function(a, b) {
-    return a.length < b.length ? a : b;
-  }).length;
+  var len = array[0].length;
+  for (var i = 1; i < array.length; i++) {
+    len = Math.min(len, array[i].length);
+  }
+  return len;
 };
 
 /**
@@ -336,14 +413,14 @@ Blockly.utils.shortestStringLength = function(array) {
  * @param {number=} opt_shortest Length of shortest string.
  * @return {number} Length of common prefix.
  */
-Blockly.utils.commonWordPrefix = function(array, opt_shortest) {
+Blockly.commonWordPrefix = function(array, opt_shortest) {
   if (!array.length) {
     return 0;
   } else if (array.length == 1) {
     return array[0].length;
   }
   var wordPrefix = 0;
-  var max = opt_shortest || Blockly.utils.shortestStringLength(array);
+  var max = opt_shortest || Blockly.shortestStringLength(array);
   for (var len = 0; len < max; len++) {
     var letter = array[0][len];
     for (var i = 1; i < array.length; i++) {
@@ -371,14 +448,14 @@ Blockly.utils.commonWordPrefix = function(array, opt_shortest) {
  * @param {number=} opt_shortest Length of shortest string.
  * @return {number} Length of common suffix.
  */
-Blockly.utils.commonWordSuffix = function(array, opt_shortest) {
+Blockly.commonWordSuffix = function(array, opt_shortest) {
   if (!array.length) {
     return 0;
   } else if (array.length == 1) {
     return array[0].length;
   }
   var wordPrefix = 0;
-  var max = opt_shortest || Blockly.utils.shortestStringLength(array);
+  var max = opt_shortest || Blockly.shortestStringLength(array);
   for (var len = 0; len < max; len++) {
     var letter = array[0].substr(-len - 1, 1);
     for (var i = 1; i < array.length; i++) {
@@ -400,75 +477,21 @@ Blockly.utils.commonWordSuffix = function(array, opt_shortest) {
 };
 
 /**
+ * Is the given string a number (includes negative and decimals).
+ * @param {string} str Input string.
+ * @return {boolean} True if number, false otherwise.
+ */
+Blockly.isNumber = function(str) {
+  return !!str.match(/^\s*-?\d+(\.\d+)?\s*$/);
+};
+
+/**
  * Parse a string with any number of interpolation tokens (%1, %2, ...).
- * It will also replace string table references (e.g., %{bky_my_msg} and
- * %{BKY_MY_MSG} will both be replaced with the value in
- * Blockly.Msg['MY_MSG']). Percentage sign characters '%' may be self-escaped
- * (e.g., '%%').
- * @param {string} message Text which might contain string table references and
- *     interpolation tokens.
+ * '%' characters may be self-escaped (%%).
+ * @param {string} message Text containing interpolation tokens.
  * @return {!Array.<string|number>} Array of strings and numbers.
  */
-Blockly.utils.tokenizeInterpolation = function(message) {
-  return Blockly.utils.tokenizeInterpolation_(message, true);
-};
-
-/**
- * Replaces string table references in a message, if the message is a string.
- * For example, "%{bky_my_msg}" and "%{BKY_MY_MSG}" will both be replaced with
- * the value in Blockly.Msg['MY_MSG'].
- * @param {string|?} message Message, which may be a string that contains
- *                           string table references.
- * @return {!string} String with message references replaced.
- */
-Blockly.utils.replaceMessageReferences = function(message) {
-  if (!goog.isString(message)) {
-    return message;
-  }
-  var interpolatedResult = Blockly.utils.tokenizeInterpolation_(message, false);
-  // When parseInterpolationTokens == false, interpolatedResult should be at
-  // most length 1.
-  return interpolatedResult.length ? interpolatedResult[0] : "";
-};
-
-/**
- * Validates that any %{BKY_...} references in the message refer to keys of
- * the Blockly.Msg string table.
- * @param {string} message Text which might contain string table references.
- * @return {boolean} True if all message references have matching values.
- *     Otherwise, false.
- */
-Blockly.utils.checkMessageReferences = function(message) {
-  var isValid = true; // True until a bad reference is found
-
-  var regex = /%{BKY_([a-zA-Z][a-zA-Z0-9_]*)}/g;
-  var match = regex.exec(message);
-  while (match != null) {
-    var msgKey = match[1];
-    if (Blockly.Msg[msgKey] == null) {
-      console.log('WARNING: No message string for %{BKY_' + msgKey + '}.');
-      isValid = false;
-    }
-
-    // Re-run on remainder of sting.
-    message = message.substring(match.index + msgKey.length + 1);
-    match = regex.exec(message);
-  }
-
-  return isValid;
-};
-
-/**
- * Internal implemention of the message reference and interpolation token
- * parsing used by tokenizeInterpolation() and replaceMessageReferences().
- * @param {string} message Text which might contain string table references and
- *     interpolation tokens.
- * @param {boolean} parseInterpolationTokens Option to parse numeric
- *     interpolation tokens (%1, %2, ...) when true.
- * @return {!Array.<string|number>} Array of strings and numbers.
- * @private
- */
-Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationTokens) {
+Blockly.tokenizeInterpolation = function(message) {
   var tokens = [];
   var chars = message.split('');
   chars.push('');  // End marker.
@@ -476,7 +499,6 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
   // 0 - Base case.
   // 1 - % found.
   // 2 - Digit found.
-  // 3 - Message ref found
   var state = 0;
   var buffer = [];
   var number = null;
@@ -484,11 +506,6 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
     var c = chars[i];
     if (state == 0) {
       if (c == '%') {
-        var text = buffer.join('');
-        if (text) {
-          tokens.push(text);
-        }
-        buffer.length = 0;
         state = 1;  // Start escape.
       } else {
         buffer.push(c);  // Regular char.
@@ -497,7 +514,7 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
       if (c == '%') {
         buffer.push(c);  // Escaped %: %%
         state = 0;
-      } else if (parseInterpolationTokens && '0' <= c && c <= '9') {
+      } else if ('0' <= c && c <= '9') {
         state = 2;
         number = c;
         var text = buffer.join('');
@@ -505,10 +522,8 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
           tokens.push(text);
         }
         buffer.length = 0;
-      } else if (c == '{') {
-        state = 3;
       } else {
-        buffer.push('%', c);  // Not recognized. Return as literal.
+        buffer.push('%', c);  // Not an escape: %a
         state = 0;
       }
     } else if (state == 2) {
@@ -519,72 +534,13 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
         i--;  // Parse this char again.
         state = 0;
       }
-    } else if (state == 3) {  // String table reference
-      if (c == '') {
-        // Premature end before closing '}'
-        buffer.splice(0, 0, '%{'); // Re-insert leading delimiter
-        i--;  // Parse this char again.
-        state = 0; // and parse as string literal.
-      } else if (c != '}') {
-        buffer.push(c);
-      } else  {
-        var rawKey = buffer.join('');
-        if (/[a-zA-Z][a-zA-Z0-9_]*/.test(rawKey)) {  // Strict matching
-          // Found a valid string key. Attempt case insensitive match.
-          var keyUpper = rawKey.toUpperCase();
-
-          // BKY_ is the prefix used to namespace the strings used in Blockly
-          // core files and the predefined blocks in ../blocks/. These strings
-          // are defined in ../msgs/ files.
-          var bklyKey = goog.string.startsWith(keyUpper, 'BKY_') ?
-              keyUpper.substring(4) : null;
-          if (bklyKey && bklyKey in Blockly.Msg) {
-            var rawValue = Blockly.Msg[bklyKey];
-            var subTokens = goog.isString(rawValue) ?
-                Blockly.utils.tokenizeInterpolation(rawValue) :
-                parseInterpolationTokens ? String(rawValue) : rawValue;
-            tokens = tokens.concat(subTokens);
-          } else {
-            // No entry found in the string table. Pass reference as string.
-            tokens.push('%{' + rawKey + '}');
-          }
-          buffer.length = 0;  // Clear the array
-          state = 0;
-        } else {
-          tokens.push('%{' + rawKey + '}');
-          buffer.length = 0;
-          state = 0; // and parse as string literal.
-        }
-      }
     }
   }
   var text = buffer.join('');
   if (text) {
     tokens.push(text);
   }
-
-  // Merge adjacent text tokens into a single string.
-  var mergedTokens = [];
-  buffer.length = 0;
-  for (var i = 0; i < tokens.length; ++i) {
-    if (typeof tokens[i] == 'string') {
-      buffer.push(tokens[i]);
-    } else {
-      text = buffer.join('');
-      if (text) {
-        mergedTokens.push(text);
-      }
-      buffer.length = 0;
-      mergedTokens.push(tokens[i]);
-    }
-  }
-  text = buffer.join('');
-  if (text) {
-    mergedTokens.push(text);
-  }
-  buffer.length = 0;
-
-  return mergedTokens;
+  return tokens;
 };
 
 /**
@@ -592,193 +548,24 @@ Blockly.utils.tokenizeInterpolation_ = function(message, parseInterpolationToken
  * 87 characters ^ 20 length > 128 bits (better than a UUID).
  * @return {string} A globally unique ID string.
  */
-Blockly.utils.genUid = function() {
+Blockly.genUid = function() {
   var length = 20;
-  var soupLength = Blockly.utils.genUid.soup_.length;
+  var soupLength = Blockly.genUid.soup_.length;
   var id = [];
   for (var i = 0; i < length; i++) {
-    id[i] = Blockly.utils.genUid.soup_.charAt(Math.random() * soupLength);
+    id[i] = Blockly.genUid.soup_.charAt(Math.random() * soupLength);
   }
   return id.join('');
 };
 
 /**
- * Legal characters for the unique ID.  Should be all on a US keyboard.
- * No characters that conflict with XML or JSON.  Requests to remove additional
- * 'problematic' characters from this soup will be denied.  That's your failure
- * to properly escape in your own environment.  Issues #251, #625, #682.
+ * Legal characters for the unique ID.
+ * Should be all on a US keyboard.  No XML special characters or control codes.
+ * Removed $ due to issue 251.
  * @private
  */
-Blockly.utils.genUid.soup_ = '!#$%()*+,-./:;=?@[]^_`{|}~' +
+Blockly.genUid.soup_ = '!#%()*+,-./:;=?@[]^_`{|}~' +
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-/**
- * Wrap text to the specified width.
- * @param {string} text Text to wrap.
- * @param {number} limit Width to wrap each line.
- * @return {string} Wrapped text.
- */
-Blockly.utils.wrap = function(text, limit) {
-  var lines = text.split('\n');
-  for (var i = 0; i < lines.length; i++) {
-    lines[i] = Blockly.utils.wrapLine_(lines[i], limit);
-  }
-  return lines.join('\n');
-};
-
-/**
- * Wrap single line of text to the specified width.
- * @param {string} text Text to wrap.
- * @param {number} limit Width to wrap each line.
- * @return {string} Wrapped text.
- * @private
- */
-Blockly.utils.wrapLine_ = function(text, limit) {
-  if (text.length <= limit) {
-    // Short text, no need to wrap.
-    return text;
-  }
-  // Split the text into words.
-  var words = text.trim().split(/\s+/);
-  // Set limit to be the length of the largest word.
-  for (var i = 0; i < words.length; i++) {
-    if (words[i].length > limit) {
-      limit = words[i].length;
-    }
-  }
-
-  var lastScore;
-  var score = -Infinity;
-  var lastText;
-  var lineCount = 1;
-  do {
-    lastScore = score;
-    lastText = text;
-    // Create a list of booleans representing if a space (false) or
-    // a break (true) appears after each word.
-    var wordBreaks = [];
-    // Seed the list with evenly spaced linebreaks.
-    var steps = words.length / lineCount;
-    var insertedBreaks = 1;
-    for (var i = 0; i < words.length - 1; i++) {
-      if (insertedBreaks < (i + 1.5) / steps) {
-        insertedBreaks++;
-        wordBreaks[i] = true;
-      } else {
-        wordBreaks[i] = false;
-      }
-    }
-    wordBreaks = Blockly.utils.wrapMutate_(words, wordBreaks, limit);
-    score = Blockly.utils.wrapScore_(words, wordBreaks, limit);
-    text = Blockly.utils.wrapToText_(words, wordBreaks);
-    lineCount++;
-  } while (score > lastScore);
-  return lastText;
-};
-
-/**
- * Compute a score for how good the wrapping is.
- * @param {!Array.<string>} words Array of each word.
- * @param {!Array.<boolean>} wordBreaks Array of line breaks.
- * @param {number} limit Width to wrap each line.
- * @return {number} Larger the better.
- * @private
- */
-Blockly.utils.wrapScore_ = function(words, wordBreaks, limit) {
-  // If this function becomes a performance liability, add caching.
-  // Compute the length of each line.
-  var lineLengths = [0];
-  var linePunctuation = [];
-  for (var i = 0; i < words.length; i++) {
-    lineLengths[lineLengths.length - 1] += words[i].length;
-    if (wordBreaks[i] === true) {
-      lineLengths.push(0);
-      linePunctuation.push(words[i].charAt(words[i].length - 1));
-    } else if (wordBreaks[i] === false) {
-      lineLengths[lineLengths.length - 1]++;
-    }
-  }
-  var maxLength = Math.max.apply(Math, lineLengths);
-
-  var score = 0;
-  for (var i = 0; i < lineLengths.length; i++) {
-    // Optimize for width.
-    // -2 points per char over limit (scaled to the power of 1.5).
-    score -= Math.pow(Math.abs(limit - lineLengths[i]), 1.5) * 2;
-    // Optimize for even lines.
-    // -1 point per char smaller than max (scaled to the power of 1.5).
-    score -= Math.pow(maxLength - lineLengths[i], 1.5);
-    // Optimize for structure.
-    // Add score to line endings after punctuation.
-    if ('.?!'.indexOf(linePunctuation[i]) != -1) {
-      score += limit / 3;
-    } else if (',;)]}'.indexOf(linePunctuation[i]) != -1) {
-      score += limit / 4;
-    }
-  }
-  // All else being equal, the last line should not be longer than the
-  // previous line.  For example, this looks wrong:
-  // aaa bbb
-  // ccc ddd eee
-  if (lineLengths.length > 1 && lineLengths[lineLengths.length - 1] <=
-      lineLengths[lineLengths.length - 2]) {
-    score += 0.5;
-  }
-  return score;
-};
-
-/**
- * Mutate the array of line break locations until an optimal solution is found.
- * No line breaks are added or deleted, they are simply moved around.
- * @param {!Array.<string>} words Array of each word.
- * @param {!Array.<boolean>} wordBreaks Array of line breaks.
- * @param {number} limit Width to wrap each line.
- * @return {!Array.<boolean>} New array of optimal line breaks.
- * @private
- */
-Blockly.utils.wrapMutate_ = function(words, wordBreaks, limit) {
-  var bestScore = Blockly.utils.wrapScore_(words, wordBreaks, limit);
-  var bestBreaks;
-  // Try shifting every line break forward or backward.
-  for (var i = 0; i < wordBreaks.length - 1; i++) {
-    if (wordBreaks[i] == wordBreaks[i + 1]) {
-      continue;
-    }
-    var mutatedWordBreaks = [].concat(wordBreaks);
-    mutatedWordBreaks[i] = !mutatedWordBreaks[i];
-    mutatedWordBreaks[i + 1] = !mutatedWordBreaks[i + 1];
-    var mutatedScore =
-        Blockly.utils.wrapScore_(words, mutatedWordBreaks, limit);
-    if (mutatedScore > bestScore) {
-      bestScore = mutatedScore;
-      bestBreaks = mutatedWordBreaks;
-    }
-  }
-  if (bestBreaks) {
-    // Found an improvement.  See if it may be improved further.
-    return Blockly.utils.wrapMutate_(words, bestBreaks, limit);
-  }
-  // No improvements found.  Done.
-  return wordBreaks;
-};
-
-/**
- * Reassemble the array of words into text, with the specified line breaks.
- * @param {!Array.<string>} words Array of each word.
- * @param {!Array.<boolean>} wordBreaks Array of line breaks.
- * @return {string} Plain text.
- * @private
- */
-Blockly.utils.wrapToText_ = function(words, wordBreaks) {
-  var text = [];
-  for (var i = 0; i < words.length; i++) {
-    text.push(words[i]);
-    if (wordBreaks[i] !== undefined) {
-      text.push(wordBreaks[i] ? '\n' : ' ');
-    }
-  }
-  return text.join('');
-};
 
 /**
  * Measure some text using a canvas in-memory.
@@ -793,121 +580,4 @@ Blockly.measureText = function(fontSize, fontFamily, fontWeight, text) {
   var context = canvas.getContext('2d');
   context.font = fontWeight + ' ' + fontSize + ' ' + fontFamily;
   return context.measureText(text).width;
-};
-
-/**
- * Encode a string's HTML entities.
- * E.g., <a> -> &lt;a&gt;
- * @param {string} rawStr Unencoded raw string to encode.
- * @return {string} String with HTML entities encoded.
- */
-Blockly.encodeEntities = function(rawStr) {
-  // CC-BY-SA https://stackoverflow.com/questions/18749591/encode-html-entities-in-javascript
-  return rawStr.replace(/[\u00A0-\u9999<>\&]/gim, function(i) {
-    return '&#' + i.charCodeAt(0) + ';';
-  });
-};
-
-/**
- * Check if 3D transforms are supported by adding an element
- * and attempting to set the property.
- * @return {boolean} true if 3D transforms are supported.
- */
-Blockly.utils.is3dSupported = function() {
-  if (Blockly.utils.is3dSupported.cached_ !== undefined) {
-    return Blockly.utils.is3dSupported.cached_;
-  }
-  // CC-BY-SA Lorenzo Polidori
-  // stackoverflow.com/questions/5661671/detecting-transform-translate3d-support
-  if (!goog.global.getComputedStyle) {
-    return false;
-  }
-
-  var el = document.createElement('p');
-  var has3d = 'none';
-  var transforms = {
-    'webkitTransform': '-webkit-transform',
-    'OTransform': '-o-transform',
-    'msTransform': '-ms-transform',
-    'MozTransform': '-moz-transform',
-    'transform': 'transform'
-  };
-
-  // Add it to the body to get the computed style.
-  document.body.insertBefore(el, null);
-
-  for (var t in transforms) {
-    if (el.style[t] !== undefined) {
-      el.style[t] = 'translate3d(1px,1px,1px)';
-      var computedStyle = goog.global.getComputedStyle(el);
-      if (!computedStyle) {
-        // getComputedStyle in Firefox returns null when blockly is loaded
-        // inside an iframe with display: none.  Returning false and not
-        // caching is3dSupported means we try again later.  This is most likely
-        // when users are interacting with blocks which should mean blockly is
-        // visible again.
-        // See https://bugzilla.mozilla.org/show_bug.cgi?id=548397
-        document.body.removeChild(el);
-        return false;
-      }
-      has3d = computedStyle.getPropertyValue(transforms[t]);
-    }
-  }
-  document.body.removeChild(el);
-  Blockly.utils.is3dSupported.cached_ = has3d !== 'none';
-  return Blockly.utils.is3dSupported.cached_;
-};
-
-/**
- * Insert a node after a reference node.
- * Contrast with node.insertBefore function.
- * @param {!Element} newNode New element to insert.
- * @param {!Element} refNode Existing element to precede new node.
- * @private
- */
-Blockly.utils.insertAfter_ = function(newNode, refNode) {
-  var siblingNode = refNode.nextSibling;
-  var parentNode = refNode.parentNode;
-  if (!parentNode) {
-    throw 'Reference node has no parent.';
-  }
-  if (siblingNode) {
-    parentNode.insertBefore(newNode, siblingNode);
-  } else {
-    parentNode.appendChild(newNode);
-  }
-};
-
-/**
- * Calls a function after the page has loaded, possibly immediately.
- * @param {function()} fn Function to run.
- * @throws Error Will throw if no global document can be found (e.g., Node.js).
- */
-Blockly.utils.runAfterPageLoad = function(fn) {
-  if (!document) {
-    throw new Error('Blockly.utils.runAfterPageLoad() requires browser document.');
-  }
-  if (document.readyState === 'complete') {
-    fn();  // Page has already loaded. Call immediately.
-  } else {
-    // Poll readyState.
-    var readyStateCheckInterval = setInterval(function() {
-      if (document.readyState === 'complete') {
-        clearInterval(readyStateCheckInterval);
-        fn();
-      }
-    }, 10);
-  }
-};
-
-/**
- * Sets the CSS transform property on an element. This function sets the
- * non-vendor-prefixed and vendor-prefixed versions for backwards compatibility
- * with older browsers. See http://caniuse.com/#feat=transforms2d
- * @param {!Element} node The node which the CSS transform should be applied.
- * @param {string} transform The value of the CSS `transform` property.
- */
-Blockly.utils.setCssTransform = function(node, transform) {
-  node.style['transform'] = transform;
-  node.style['-webkit-transform'] = transform;
 };

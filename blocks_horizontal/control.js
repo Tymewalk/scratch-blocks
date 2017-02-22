@@ -62,10 +62,9 @@ Blockly.Blocks['control_repeat'] = {
       "inputsInline": true,
       "previousStatement": null,
       "nextStatement": null,
-      "category": Blockly.Categories.control,
       "colour": Blockly.Colours.control.primary,
       "colourSecondary": Blockly.Colours.control.secondary,
-      "colourTertiary": Blockly.Colours.control.tertiary
+      "colourTertiary": Blockly.Colours.control.tertiary,
     });
   }
 };
@@ -96,7 +95,6 @@ Blockly.Blocks['control_forever'] = {
       ],
       "inputsInline": true,
       "previousStatement": null,
-      "category": Blockly.Categories.control,
       "colour": Blockly.Colours.control.primary,
       "colourSecondary": Blockly.Colours.control.secondary,
       "colourTertiary": Blockly.Colours.control.tertiary
@@ -136,10 +134,9 @@ Blockly.Blocks['control_repeat'] = {
       "inputsInline": true,
       "previousStatement": null,
       "nextStatement": null,
-      "category": Blockly.Categories.control,
       "colour": Blockly.Colours.control.primary,
       "colourSecondary": Blockly.Colours.control.secondary,
-      "colourTertiary": Blockly.Colours.control.tertiary
+      "colourTertiary": Blockly.Colours.control.tertiary,
     });
   }
 };
@@ -164,7 +161,6 @@ Blockly.Blocks['control_stop'] = {
       ],
       "inputsInline": true,
       "previousStatement": null,
-      "category": Blockly.Categories.control,
       "colour": Blockly.Colours.control.primary,
       "colourSecondary": Blockly.Colours.control.secondary,
       "colourTertiary": Blockly.Colours.control.tertiary
@@ -198,7 +194,6 @@ Blockly.Blocks['control_wait'] = {
       "inputsInline": true,
       "previousStatement": null,
       "nextStatement": null,
-      "category": Blockly.Categories.control,
       "colour": Blockly.Colours.control.primary,
       "colourSecondary": Blockly.Colours.control.secondary,
       "colourTertiary": Blockly.Colours.control.tertiary

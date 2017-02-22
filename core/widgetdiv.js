@@ -26,15 +26,10 @@
  */
 'use strict';
 
-/**
- * @name Blockly.WidgetDiv
- * @namespace
- **/
 goog.provide('Blockly.WidgetDiv');
 
 goog.require('Blockly.Css');
 goog.require('goog.dom');
-goog.require('goog.dom.TagName');
 goog.require('goog.style');
 
 
@@ -91,8 +86,7 @@ Blockly.WidgetDiv.createDom = function() {
     return;  // Already created.
   }
   // Create an HTML container for popup overlays (e.g. editor widgets).
-  Blockly.WidgetDiv.DIV =
-      goog.dom.createDom(goog.dom.TagName.DIV, 'blocklyWidgetDiv');
+  Blockly.WidgetDiv.DIV = goog.dom.createDom('div', 'blocklyWidgetDiv');
   document.body.appendChild(Blockly.WidgetDiv.DIV);
 };
 
@@ -219,5 +213,6 @@ Blockly.WidgetDiv.position = function(anchorX, anchorY, windowSize,
   }
   Blockly.WidgetDiv.DIV.style.left = anchorX + 'px';
   Blockly.WidgetDiv.DIV.style.top = anchorY + 'px';
-  Blockly.WidgetDiv.DIV.style.height = windowSize.height + 'px';
+  Blockly.WidgetDiv.DIV.style.height =
+      (windowSize.height - anchorY + scrollOffset.y) + 'px';
 };

@@ -26,7 +26,6 @@
 
 goog.provide('Blockly.Bubble');
 
-goog.require('Blockly.Touch');
 goog.require('Blockly.Workspace');
 goog.require('goog.dom');
 goog.require('goog.math');
@@ -75,10 +74,10 @@ Blockly.Bubble = function(workspace, content, shape, anchorXY,
   this.rendered_ = true;
 
   if (!workspace.options.readOnly) {
-    Blockly.bindEventWithChecks_(this.bubbleBack_, 'mousedown', this,
+    Blockly.bindEvent_(this.bubbleBack_, 'mousedown', this,
                        this.bubbleMouseDown_);
     if (this.resizeGroup_) {
-      Blockly.bindEventWithChecks_(this.resizeGroup_, 'mousedown', this,
+      Blockly.bindEvent_(this.resizeGroup_, 'mousedown', this,
                          this.resizeMouseDown_);
     }
   }
@@ -93,7 +92,7 @@ Blockly.Bubble.BORDER_WIDTH = 6;
  * Determines the thickness of the base of the arrow in relation to the size
  * of the bubble.  Higher numbers result in thinner arrows.
  */
-Blockly.Bubble.ARROW_THICKNESS = 5;
+Blockly.Bubble.ARROW_THICKNESS = 10;
 
 /**
  * The number of degrees that the arrow bends counter-clockwise.
@@ -143,17 +142,6 @@ Blockly.Bubble.unbindDragEvents_ = function() {
     Blockly.unbindEvent_(Blockly.Bubble.onMouseMoveWrapper_);
     Blockly.Bubble.onMouseMoveWrapper_ = null;
   }
-};
-
-/*
- * Handle a mouse-up event while dragging a bubble's border or resize handle.
- * @param {!Event} e Mouse up event.
- * @private
- */
-Blockly.Bubble.bubbleMouseUp_ = function(/*e*/) {
-  Blockly.Touch.clearTouchIdentifier();
-  Blockly.Css.setCursor(Blockly.Css.Cursor.OPEN);
-  Blockly.Bubble.unbindDragEvents_();
 };
 
 /**
@@ -222,7 +210,7 @@ Blockly.Bubble.prototype.createDom_ = function(content, hasResize) {
     [...content goes here...]
   </g>
   */
-  this.bubbleGroup_ = Blockly.utils.createSvgElement('g', {}, null);
+  this.bubbleGroup_ = Blockly.createSvgElement('g', {}, null);
   var filter =
       {'filter': 'url(#' + this.workspace_.options.embossFilterId + ')'};
   if (goog.userAgent.getUserAgentString().indexOf('JavaFX') != -1) {
@@ -232,27 +220,27 @@ Blockly.Bubble.prototype.createDom_ = function(content, hasResize) {
     // https://github.com/google/blockly/issues/99
     filter = {};
   }
-  var bubbleEmboss = Blockly.utils.createSvgElement('g',
+  var bubbleEmboss = Blockly.createSvgElement('g',
       filter, this.bubbleGroup_);
-  this.bubbleArrow_ = Blockly.utils.createSvgElement('path', {}, bubbleEmboss);
-  this.bubbleBack_ = Blockly.utils.createSvgElement('rect',
+  this.bubbleArrow_ = Blockly.createSvgElement('path', {}, bubbleEmboss);
+  this.bubbleBack_ = Blockly.createSvgElement('rect',
       {'class': 'blocklyDraggable', 'x': 0, 'y': 0,
       'rx': Blockly.Bubble.BORDER_WIDTH, 'ry': Blockly.Bubble.BORDER_WIDTH},
       bubbleEmboss);
   if (hasResize) {
-    this.resizeGroup_ = Blockly.utils.createSvgElement('g',
+    this.resizeGroup_ = Blockly.createSvgElement('g',
         {'class': this.workspace_.RTL ?
                   'blocklyResizeSW' : 'blocklyResizeSE'},
         this.bubbleGroup_);
     var resizeSize = 2 * Blockly.Bubble.BORDER_WIDTH;
-    Blockly.utils.createSvgElement('polygon',
+    Blockly.createSvgElement('polygon',
         {'points': '0,x x,x x,0'.replace(/x/g, resizeSize.toString())},
         this.resizeGroup_);
-    Blockly.utils.createSvgElement('line',
+    Blockly.createSvgElement('line',
         {'class': 'blocklyResizeLine',
         'x1': resizeSize / 3, 'y1': resizeSize - 1,
         'x2': resizeSize - 1, 'y2': resizeSize / 3}, this.resizeGroup_);
-    Blockly.utils.createSvgElement('line',
+    Blockly.createSvgElement('line',
         {'class': 'blocklyResizeLine',
         'x1': resizeSize * 2 / 3, 'y1': resizeSize - 1,
         'x2': resizeSize - 1, 'y2': resizeSize * 2 / 3}, this.resizeGroup_);
@@ -271,11 +259,11 @@ Blockly.Bubble.prototype.createDom_ = function(content, hasResize) {
 Blockly.Bubble.prototype.bubbleMouseDown_ = function(e) {
   this.promote_();
   Blockly.Bubble.unbindDragEvents_();
-  if (Blockly.utils.isRightButton(e)) {
+  if (Blockly.isRightButton(e)) {
     // No right-click.
     e.stopPropagation();
     return;
-  } else if (Blockly.utils.isTargetInput(e)) {
+  } else if (Blockly.isTargetInput_(e)) {
     // When focused on an HTML text input widget, don't trap any events.
     return;
   }
@@ -286,9 +274,9 @@ Blockly.Bubble.prototype.bubbleMouseDown_ = function(e) {
       this.workspace_.RTL ? -this.relativeLeft_ : this.relativeLeft_,
       this.relativeTop_));
 
-  Blockly.Bubble.onMouseUpWrapper_ = Blockly.bindEventWithChecks_(document,
-      'mouseup', this, Blockly.Bubble.bubbleMouseUp_);
-  Blockly.Bubble.onMouseMoveWrapper_ = Blockly.bindEventWithChecks_(document,
+  Blockly.Bubble.onMouseUpWrapper_ = Blockly.bindEvent_(document,
+      'mouseup', this, Blockly.Bubble.unbindDragEvents_);
+  Blockly.Bubble.onMouseMoveWrapper_ = Blockly.bindEvent_(document,
       'mousemove', this, this.bubbleMouseMove_);
   Blockly.hideChaff();
   // This event has been handled.  No need to bubble up to the document.
@@ -317,7 +305,7 @@ Blockly.Bubble.prototype.bubbleMouseMove_ = function(e) {
 Blockly.Bubble.prototype.resizeMouseDown_ = function(e) {
   this.promote_();
   Blockly.Bubble.unbindDragEvents_();
-  if (Blockly.utils.isRightButton(e)) {
+  if (Blockly.isRightButton(e)) {
     // No right-click.
     e.stopPropagation();
     return;
@@ -328,9 +316,9 @@ Blockly.Bubble.prototype.resizeMouseDown_ = function(e) {
   this.workspace_.startDrag(e, new goog.math.Coordinate(
       this.workspace_.RTL ? -this.width_ : this.width_, this.height_));
 
-  Blockly.Bubble.onMouseUpWrapper_ = Blockly.bindEventWithChecks_(document,
-      'mouseup', this, Blockly.Bubble.bubbleMouseUp_);
-  Blockly.Bubble.onMouseMoveWrapper_ = Blockly.bindEventWithChecks_(document,
+  Blockly.Bubble.onMouseUpWrapper_ = Blockly.bindEvent_(document,
+      'mouseup', this, Blockly.Bubble.unbindDragEvents_);
+  Blockly.Bubble.onMouseMoveWrapper_ = Blockly.bindEvent_(document,
       'mousemove', this, this.resizeMouseMove_);
   Blockly.hideChaff();
   // This event has been handled.  No need to bubble up to the document.
@@ -530,7 +518,7 @@ Blockly.Bubble.prototype.renderArrow_ = function() {
     var bubbleSize = this.getBubbleSize();
     var thickness = (bubbleSize.width + bubbleSize.height) /
                     Blockly.Bubble.ARROW_THICKNESS;
-    thickness = Math.min(thickness, bubbleSize.width, bubbleSize.height) / 4;
+    thickness = Math.min(thickness, bubbleSize.width, bubbleSize.height) / 2;
 
     // Back the tip of the arrow off of the anchor.
     var backoffRatio = 1 - Blockly.Bubble.ANCHOR_RADIUS / hypotenuse;

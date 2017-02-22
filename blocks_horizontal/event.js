@@ -51,7 +51,6 @@ Blockly.Blocks['event_whenflagclicked'] = {
       ],
       "inputsInline": true,
       "nextStatement": null,
-      "category": Blockly.Categories.event,
       "colour": Blockly.Colours.event.primary,
       "colourSecondary": Blockly.Colours.event.secondary,
       "colourTertiary": Blockly.Colours.event.tertiary
@@ -112,7 +111,6 @@ Blockly.Blocks['event_whenbroadcastreceived'] = {
       ],
       "inputsInline": true,
       "nextStatement": null,
-      "category": Blockly.Categories.event,
       "colour": Blockly.Colours.event.primary,
       "colourSecondary": Blockly.Colours.event.secondary,
       "colourTertiary": Blockly.Colours.event.tertiary
@@ -174,7 +172,6 @@ Blockly.Blocks['event_broadcast'] = {
       "inputsInline": true,
       "previousStatement": null,
       "nextStatement": null,
-      "category": Blockly.Categories.event,
       "colour": Blockly.Colours.event.primary,
       "colourSecondary": Blockly.Colours.event.secondary,
       "colourTertiary": Blockly.Colours.event.tertiary

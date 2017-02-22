@@ -29,7 +29,7 @@
 # cycle since there is no need to rebuild or recompile, just reload.
 #
 # This script also generates:
-#   blocks_compressed.js: The compressed common blocks.
+#   blocks_compressed.js: The compressed Blockly language blocks.
 #   blocks_horizontal_compressed.js: The compressed Scratch horizontal blocks.
 #   blocks_vertical_compressed.js: The compressed Scratch vertical blocks.
 #   msg/js/<LANG>.js for every language <LANG> defined in msg/js/<LANG>.json.
@@ -87,7 +87,7 @@ var isNodeJS = !!(typeof module !== 'undefined' && module.exports &&
 
 if (isNodeJS) {
   var window = {};
-  require('closure-library');
+  require('../closure-library/closure/goog/bootstrap/nodejs');
 }
 
 window.BLOCKLY_DIR = (function() {
@@ -109,13 +109,13 @@ window.BLOCKLY_DIR = (function() {
 window.BLOCKLY_BOOT = function() {
   var dir = '';
   if (isNodeJS) {
-    require('closure-library');
+    require('../closure-library/closure/goog/bootstrap/nodejs');
     dir = 'blockly';
   } else {
     // Execute after Closure has loaded.
     if (!window.goog) {
       alert('Error: Closure not found.  Read this:\\n' +
-            'developers.google.com/blockly/guides/modify/web/closure');
+            'developers.google.com/blockly/hacking/closure');
     }
     dir = window.BLOCKLY_DIR.match(/[^\\/]+$/)[0];
   }
@@ -181,11 +181,6 @@ class Gen_compressed(threading.Thread):
     self.gen_blocks("horizontal")
     self.gen_blocks("vertical")
     self.gen_blocks("common")
-    self.gen_generator("javascript")
-    self.gen_generator("python")
-    self.gen_generator("php")
-    self.gen_generator("dart")
-    self.gen_generator("lua")
 
   def gen_core(self, vertical):
     if vertical:
@@ -227,7 +222,7 @@ class Gen_compressed(threading.Thread):
       filenames = glob.glob(os.path.join("blocks_vertical", "*.js"))
     elif block_type == "common":
       target_filename = "blocks_compressed.js"
-      filenames = glob.glob(os.path.join("blocks_common", "*.js"))
+      filenames = glob.glob(os.path.join("blocks", "*.js"))
     # Define the parameters for the POST request.
     params = [
         ("compilation_level", "SIMPLE_OPTIMIZATIONS"),
@@ -243,7 +238,6 @@ class Gen_compressed(threading.Thread):
     params.append(("js_code", "goog.provide('Blockly.Blocks');"))
     # Add Blockly.Colours for use of centralized colour bank
     filenames.append(os.path.join("core", "colours.js"))
-    filenames.append(os.path.join("core", "constants.js"))
     for filename in filenames:
       f = open(filename)
       params.append(("js_code", "".join(f.readlines())))
@@ -251,34 +245,6 @@ class Gen_compressed(threading.Thread):
 
     # Remove Blockly.Blocks to be compatible with Blockly.
     remove = "var Blockly={Blocks:{}};"
-    self.do_compile(params, target_filename, filenames, remove)
-
-  def gen_generator(self, language):
-    target_filename = language + "_compressed.js"
-    # Define the parameters for the POST request.
-    params = [
-        ("compilation_level", "SIMPLE_OPTIMIZATIONS"),
-        ("output_format", "json"),
-        ("output_info", "compiled_code"),
-        ("output_info", "warnings"),
-        ("output_info", "errors"),
-        ("output_info", "statistics"),
-      ]
-
-    # Read in all the source files.
-    # Add Blockly.Generator to be compatible with the compiler.
-    params.append(("js_code", "goog.provide('Blockly.Generator');"))
-    filenames = glob.glob(
-        os.path.join("generators", language, "*.js"))
-    filenames.insert(0, os.path.join("generators", language + ".js"))
-    for filename in filenames:
-      f = open(filename)
-      params.append(("js_code", "".join(f.readlines())))
-      f.close()
-    filenames.insert(0, "[goog.provide]")
-
-    # Remove Blockly.Generator to be compatible with Blockly.
-    remove = "var Blockly={Generator:{}};"
     self.do_compile(params, target_filename, filenames, remove)
 
   def do_compile(self, params, target_filename, filenames, remove):
@@ -432,7 +398,6 @@ class Gen_langfiles(threading.Thread):
           os.path.join("i18n", "create_messages.py"),
           "--source_lang_file", os.path.join("msg", "json", "en.json"),
           "--source_synonym_file", os.path.join("msg", "json", "synonyms.json"),
-          "--source_constants_file", os.path.join("msg", "json", "constants.json"),
           "--key_file", os.path.join("msg", "json", "keys.json"),
           "--output_dir", os.path.join("msg", "js"),
           "--quiet"]
@@ -479,7 +444,7 @@ if __name__ == "__main__":
            "Please rename this directory.")
     else:
       print("""Error: Closure not found.  Read this:
-developers.google.com/blockly/guides/modify/web/closure""")
+https://developers.google.com/blockly/hacking/closure""")
     sys.exit(1)
 
   search_paths = calcdeps.ExpandDirectories(

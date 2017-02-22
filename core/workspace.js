@@ -26,7 +26,6 @@
 
 goog.provide('Blockly.Workspace');
 
-goog.require('goog.array');
 goog.require('goog.math');
 
 
@@ -38,7 +37,7 @@ goog.require('goog.math');
  */
 Blockly.Workspace = function(opt_options) {
   /** @type {string} */
-  this.id = Blockly.utils.genUid();
+  this.id = Blockly.genUid();
   Blockly.Workspace.WorkspaceDB_[this.id] = this;
   /** @type {!Blockly.Options} */
   this.options = opt_options || {};
@@ -46,8 +45,6 @@ Blockly.Workspace = function(opt_options) {
   this.RTL = !!this.options.RTL;
   /** @type {boolean} */
   this.horizontalLayout = !!this.options.horizontalLayout;
-  /** @type {number} */
-  this.toolboxPosition = this.options.toolboxPosition;
 
   /**
    * @type {!Array.<!Blockly.Block>}
@@ -80,23 +77,17 @@ Blockly.Workspace = function(opt_options) {
    * @private
    */
   this.blockDB_ = Object.create(null);
-  /*
-   * @type {!Array.<string>}
-   * A list of all of the named variables in the workspace, including variables
-   * that are not currently in use.
-   */
-  this.variableList = [];
 };
 
 /**
- * Returns `true` if the workspace is visible and `false` if it's headless.
- * @type {boolean}
+ * Workspaces may be headless.
+ * @type {boolean} True if visible.  False if headless.
  */
 Blockly.Workspace.prototype.rendered = false;
 
 /**
- * Maximum number of undo events in stack. `0` turns off undo, `Infinity` sets it to unlimited.
- * @type {number}
+ * Maximum number of undo events in stack.
+ * @type {number} 0 to turn off undo, Infinity for unlimited.
  */
 Blockly.Workspace.prototype.MAX_UNDO = 1024;
 
@@ -125,17 +116,6 @@ Blockly.Workspace.SCAN_ANGLE = 3;
  */
 Blockly.Workspace.prototype.addTopBlock = function(block) {
   this.topBlocks_.push(block);
-  if (this.isFlyout) {
-    // This is for the (unlikely) case where you have a variable in a block in
-    // an always-open flyout.  It needs to be possible to edit the block in the
-    // flyout, so the contents of the dropdown need to be correct.
-    var variables = Blockly.Variables.allUsedVariables(block);
-    for (var i = 0; i < variables.length; i++) {
-      if (this.variableList.indexOf(variables[i]) == -1) {
-        this.variableList.push(variables[i]);
-      }
-    }
-  }
 };
 
 /**
@@ -143,7 +123,15 @@ Blockly.Workspace.prototype.addTopBlock = function(block) {
  * @param {!Blockly.Block} block Block to remove.
  */
 Blockly.Workspace.prototype.removeTopBlock = function(block) {
-  if (!goog.array.remove(this.topBlocks_, block)) {
+  var found = false;
+  for (var child, i = 0; child = this.topBlocks_[i]; i++) {
+    if (child == block) {
+      this.topBlocks_.splice(i, 1);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
     throw 'Block not present in workspace\'s list of top-most blocks.';
   }
 };
@@ -197,179 +185,6 @@ Blockly.Workspace.prototype.clear = function() {
   if (!existingGroup) {
     Blockly.Events.setGroup(false);
   }
-  this.variableList.length = 0;
-  // Any block with a drop-down or WidgetDiv was disposed.
-  if (Blockly.DropDownDiv) {
-    Blockly.DropDownDiv.hideWithoutAnimation();
-  }
-  if (Blockly.WidgetDiv) {
-    Blockly.WidgetDiv.hide(true);
-  }
-};
-
-/**
- * Walk the workspace and update the list of variables to include all variables
- * in use on the workspace.  Use when loading new workspaces from disk.
- * @param {boolean} clearList True if the old variable list should be cleared.
- */
-Blockly.Workspace.prototype.updateVariableList = function(clearList) {
-  // TODO: Sort
-  if (!this.isFlyout) {
-    // Update the list in place so that the flyout's references stay correct.
-    if (clearList) {
-      this.variableList.length = 0;
-    }
-    var allVariables = Blockly.Variables.allUsedVariables(this);
-    for (var i = 0; i < allVariables.length; i++) {
-      this.createVariable(allVariables[i]);
-    }
-  }
-};
-
-/**
- * Rename a variable by updating its name in the variable list.
- * TODO: #468
- * @param {string} oldName Variable to rename.
- * @param {string} newName New variable name.
- */
-Blockly.Workspace.prototype.renameVariable = function(oldName, newName) {
-  // Find the old name in the list.
-  var variableIndex = this.variableIndexOf(oldName);
-  var newVariableIndex = this.variableIndexOf(newName);
-
-  // We might be renaming to an existing name but with different case.  If so,
-  // we will also update all of the blocks using the new name to have the
-  // correct case.
-  if (newVariableIndex != -1 &&
-      this.variableList[newVariableIndex] != newName) {
-    var oldCase = this.variableList[newVariableIndex];
-  }
-
-  Blockly.Events.setGroup(true);
-  var blocks = this.getAllBlocks();
-  // Iterate through every block.
-  for (var i = 0; i < blocks.length; i++) {
-    blocks[i].renameVar(oldName, newName);
-    if (oldCase) {
-      blocks[i].renameVar(oldCase, newName);
-    }
-  }
-  Blockly.Events.setGroup(false);
-
-
-  if (variableIndex == newVariableIndex ||
-      variableIndex != -1 && newVariableIndex == -1) {
-    // Only changing case, or renaming to a completely novel name.
-    this.variableList[variableIndex] = newName;
-  } else if (variableIndex != -1 && newVariableIndex != -1) {
-    // Renaming one existing variable to another existing variable.
-    // The case might have changed, so we update the destination ID.
-    this.variableList[newVariableIndex] = newName;
-    this.variableList.splice(variableIndex, 1);
-  } else {
-    this.variableList.push(newName);
-    console.log('Tried to rename an non-existent variable.');
-  }
-};
-
-/**
- * Create a variable with the given name.
- * TODO: #468
- * @param {string} name The new variable's name.
- */
-Blockly.Workspace.prototype.createVariable = function(name) {
-  var index = this.variableIndexOf(name);
-  if (index == -1) {
-    this.variableList.push(name);
-  }
-};
-
-/**
- * Find all the uses of a named variable.
- * @param {string} name Name of variable.
- * @return {!Array.<!Blockly.Block>} Array of block usages.
- */
-Blockly.Workspace.prototype.getVariableUses = function(name) {
-  var uses = [];
-  var blocks = this.getAllBlocks();
-  // Iterate through every block and check the name.
-  for (var i = 0; i < blocks.length; i++) {
-    var blockVariables = blocks[i].getVars();
-    if (blockVariables) {
-      for (var j = 0; j < blockVariables.length; j++) {
-        var varName = blockVariables[j];
-        // Variable name may be null if the block is only half-built.
-        if (varName && Blockly.Names.equals(varName, name)) {
-          uses.push(blocks[i]);
-        }
-      }
-    }
-  }
-  return uses;
-};
-
-/**
- * Delete a variables and all of its uses from this workspace.
- * @param {string} name Name of variable to delete.
- */
-Blockly.Workspace.prototype.deleteVariable = function(name) {
-  var variableIndex = this.variableIndexOf(name);
-  if (variableIndex == -1) {
-    return;
-  }
-  // Check whether this variable is a function parameter before deleting.
-  var uses = this.getVariableUses(name);
-  for (var i = 0, block; block = uses[i]; i++) {
-    if (block.type == 'procedures_defnoreturn' ||
-      block.type == 'procedures_defreturn') {
-      var procedureName = block.getFieldValue('NAME');
-      Blockly.alert(
-          Blockly.Msg.CANNOT_DELETE_VARIABLE_PROCEDURE.
-          replace('%1', name).
-          replace('%2', procedureName));
-      return;
-    }
-  }
-
-  var workspace = this;
-  function doDeletion() {
-    Blockly.Events.setGroup(true);
-    for (var i = 0; i < uses.length; i++) {
-      uses[i].dispose(true, false);
-    }
-    Blockly.Events.setGroup(false);
-    workspace.variableList.splice(variableIndex, 1);
-  }
-  if (uses.length > 1) {
-    // Confirm before deleting multiple blocks.
-    Blockly.confirm(
-        Blockly.Msg.DELETE_VARIABLE_CONFIRMATION.replace('%1', uses.length).
-        replace('%2', name),
-        function(ok) {
-          if (ok) {
-            doDeletion();
-          }
-        });
-  } else {
-    // No confirmation necessary for a single block.
-    doDeletion();
-  }
-};
-
-/**
- * Check whether a variable exists with the given name.  The check is
- * case-insensitive.
- * @param {string} name The name to check for.
- * @return {number} The index of the name in the variable list, or -1 if it is
- *     not present.
- */
-Blockly.Workspace.prototype.variableIndexOf = function(name) {
-  for (var i = 0, varname; varname = this.variableList[i]; i++) {
-    if (Blockly.Names.equals(varname, name)) {
-      return i;
-    }
-  }
-  return -1;
 };
 
 /**
@@ -386,12 +201,24 @@ Blockly.Workspace.prototype.getWidth = function() {
  * Obtain a newly created block.
  * @param {?string} prototypeName Name of the language object containing
  *     type-specific functions for this block.
- * @param {string=} opt_id Optional ID.  Use this ID if provided, otherwise
+ * @param {=string} opt_id Optional ID.  Use this ID if provided, otherwise
  *     create a new id.
  * @return {!Blockly.Block} The created block.
  */
 Blockly.Workspace.prototype.newBlock = function(prototypeName, opt_id) {
   return new Blockly.Block(this, prototypeName, opt_id);
+};
+
+/**
+ * The number of blocks that may be added to the workspace before reaching
+ *     the maxBlocks.
+ * @return {number} Number of blocks left.
+ */
+Blockly.Workspace.prototype.remainingCapacity = function() {
+  if (isNaN(this.options.maxBlocks)) {
+    return Infinity;
+  }
+  return this.options.maxBlocks - this.getAllBlocks().length;
 };
 
 /**
@@ -449,7 +276,10 @@ Blockly.Workspace.prototype.addChangeListener = function(func) {
  * @param {Function} func Function to stop calling.
  */
 Blockly.Workspace.prototype.removeChangeListener = function(func) {
-  goog.array.remove(this.listeners_, func);
+  var i = this.listeners_.indexOf(func);
+  if (i != -1) {
+    this.listeners_.splice(i, 1);
+  }
 };
 
 /**
@@ -464,10 +294,42 @@ Blockly.Workspace.prototype.fireChangeListener = function(event) {
       this.undoStack_.unshift();
     }
   }
-  // Copy listeners in case a listener attaches/detaches itself.
-  var currentListeners = this.listeners_.slice();
-  for (var i = 0, func; func = currentListeners[i]; i++) {
+  for (var i = 0, func; func = this.listeners_[i]; i++) {
     func(event);
+  }
+};
+
+/**
+ * When a block in the workspace is tapped, call a function with the
+ *  blockId and root blockId.
+ * @param {!Function} func Function to call.
+ * @return {!Function} Function that can be passed to
+ *     removeTapListener.
+ */
+Blockly.Workspace.prototype.addTapListener = function(func) {
+  this.tapListeners_.push(func);
+  return func;
+};
+
+/**
+ * Stop listening for this workspace's taps.
+ * @param {Function} func Function to stop calling.
+ */
+Blockly.Workspace.prototype.removeTapListener = function(func) {
+  var i = this.tapListeners_.indexOf(func);
+  if (i != -1) {
+    this.tapListeners_.splice(i, 1);
+  }
+};
+
+/**
+ * Fire a tap event.
+ * @param {string} blockId ID of block that was tapped
+ * @param {string} rootBlockId ID of root block in tree that was tapped
+ */
+Blockly.Workspace.prototype.fireTapListener = function(blockId, rootBlockId) {
+  for (var i = 0, func; func = this.tapListeners_[i]; i++) {
+    func(blockId, rootBlockId);
   }
 };
 
@@ -477,37 +339,7 @@ Blockly.Workspace.prototype.fireChangeListener = function(event) {
  * @return {Blockly.Block} The sought after block or null if not found.
  */
 Blockly.Workspace.prototype.getBlockById = function(id) {
-  var block = this.blockDB_[id];
-  if (!block && this.getFlyout() && this.getFlyout().getWorkspace()) {
-    block = this.getFlyout().getWorkspace().blockDB_[id];
-  }
-  return block || null;
-};
-
-/**
- * Checks whether all value and statement inputs in the workspace are filled
- * with blocks.
- * @param {boolean=} opt_shadowBlocksAreFilled An optional argument controlling
- *     whether shadow blocks are counted as filled. Defaults to true.
- * @return {boolean} True if all inputs are filled, false otherwise.
- */
-Blockly.Workspace.prototype.allInputsFilled = function(opt_shadowBlocksAreFilled) {
-  var blocks = this.getTopBlocks(false);
-  for (var i = 0, block; block = blocks[i]; i++) {
-    if (!block.allInputsFilled(opt_shadowBlocksAreFilled)) {
-      return false;
-    }
-  }
-  return true;
-};
-
-/**
- * Getter for the flyout associated with this workspace.  This is null in a
- * non-rendered workspace, but may be overriden by subclasses.
- * @return {Blockly.Flyout} The flyout on this workspace.
- */
-Blockly.Workspace.prototype.getFlyout = function() {
-  return null;
+  return this.blockDB_[id] || null;
 };
 
 /**

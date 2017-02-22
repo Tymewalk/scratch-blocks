@@ -46,7 +46,7 @@ goog.require('goog.ui.ColorPicker');
  */
 Blockly.FieldColour = function(colour, opt_validator) {
   Blockly.FieldColour.superClass_.constructor.call(this, colour, opt_validator);
-  this.addArgType('colour');
+  this.setText(Blockly.Field.NBSP + Blockly.Field.NBSP + Blockly.Field.NBSP);
 };
 goog.inherits(Blockly.FieldColour, Blockly.Field);
 
@@ -70,6 +70,12 @@ Blockly.FieldColour.prototype.columns_ = 0;
  */
 Blockly.FieldColour.prototype.init = function(block) {
   Blockly.FieldColour.superClass_.init.call(this, block);
+  // TODO(#163): borderRect_ has been removed from the field.
+  // When fixing field_colour, we should re-color the shadow block instead,
+  // or re-implement a rectangle in the field.
+  if (this.borderRect_) {
+    this.borderRect_.style['fillOpacity'] = 1;
+  }
   this.setValue(this.getValue());
 };
 
@@ -105,12 +111,8 @@ Blockly.FieldColour.prototype.setValue = function(colour) {
         this.sourceBlock_, 'field', this.name, this.colour_, colour));
   }
   this.colour_ = colour;
-  if (this.sourceBlock_) {
-    this.sourceBlock_.setColour(
-      colour,
-      this.sourceBlock_.getColourSecondary(),
-      this.sourceBlock_.getColourTertiary()
-    );
+  if (this.borderRect_) {
+    this.borderRect_.style.fill = colour;
   }
 };
 
@@ -126,14 +128,6 @@ Blockly.FieldColour.prototype.getText = function() {
     colour = '#' + m[1] + m[2] + m[3];
   }
   return colour;
-};
-
-/**
- * Returns the fixed height and width.
- * @return {!goog.math.Size} Height and width.
- */
-Blockly.FieldColour.prototype.getSize = function() {
-  return new goog.math.Size(Blockly.BlockSvg.FIELD_WIDTH, Blockly.BlockSvg.FIELD_HEIGHT);
 };
 
 /**
@@ -225,9 +219,12 @@ Blockly.FieldColour.prototype.showEditor_ = function() {
       function(event) {
         var colour = event.target.getSelectedColor() || '#000000';
         Blockly.WidgetDiv.hide();
-        if (thisField.sourceBlock_) {
+        if (thisField.sourceBlock_ && thisField.validator_) {
           // Call any validation function, and allow it to override.
-          colour = thisField.callValidator(colour);
+          var override = thisField.validator_(colour);
+          if (override !== undefined) {
+            colour = override;
+          }
         }
         if (colour !== null) {
           thisField.setValue(colour);
@@ -243,5 +240,4 @@ Blockly.FieldColour.widgetDispose_ = function() {
   if (Blockly.FieldColour.changeEventKey_) {
     goog.events.unlistenByKey(Blockly.FieldColour.changeEventKey_);
   }
-  Blockly.Events.setGroup(false);
 };

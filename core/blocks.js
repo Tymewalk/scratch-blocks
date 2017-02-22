@@ -19,14 +19,9 @@
  */
 
 /**
- * @fileoverview A mapping of block type names to block prototype objects.
+ * @fileoverview Empty name space for the Blocks singleton.
  * @author spertus@google.com (Ellen Spertus)
  */
 'use strict';
 
-/**
- * A mapping of block type names to block prototype objects.
- * @name Blockly.Blocks
- * @type {!Object<string,Object>}
- */
 goog.provide('Blockly.Blocks');
